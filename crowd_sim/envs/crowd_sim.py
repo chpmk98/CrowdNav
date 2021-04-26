@@ -127,9 +127,7 @@ class CrowdSim(gym.Env):
         :param rule:
         :return:
         """
-        # generate groups of pedestrians
-        #self.generate_groups() # !! I think I actually overwrite most of ur variables T-T
-
+        
         # initial min separation distance to avoid danger penalty at beginning
         if rule == 'square_crossing':
             self.humans = []
@@ -141,6 +139,11 @@ class CrowdSim(gym.Env):
                 self.humans.append(self.generate_circle_crossing_human())
         elif rule == 'group_circle_crossing':
             group_num = self.config.getint('sim', 'group_num')
+            # select the number of groups from a Poisson distribution if
+            # the number of groups is not positive
+            if group_num <= 0:
+                group_lambda = self.config.getfloat('sim', 'group_lambda')
+                group_num = poisson.rvs(group_lambda) + 1
             self.humans = []
             self.group_objs = []
             self.groups = []
@@ -203,28 +206,6 @@ class CrowdSim(gym.Env):
                     self.humans.append(human)
         else:
             raise ValueError("Rule doesn't exist")
-
-    def chunk(xs, n):
-        ys = list(xs)
-        random.shuffle(ys)
-        ylen = len(ys)
-        size = int(ylen / n)
-        chunks = [ys[0+size*i : size*(i+1)] for i in range(n)]
-        leftover = ylen - size*n
-        edge = size*n
-        for i in range(leftover):
-                chunks[i%n].append(ys[edge+i])
-        return chunks
-
-    def generate_groups(self):
-        human_indices = range(self.human_num)
-        if self.one_group:
-            self.groups = list(human_indices)
-        else:
-            num_groups = poisson.rvs(1.2)
-            if (num_groups <= 0) or (num_groups > human_num):
-                num_groups = self.human_num
-            self.groups = list(chunk(human_indices, num_groups))
 
     def generate_circle_crossing_human(self):
         human = Human(self.config, 'humans')
