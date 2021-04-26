@@ -25,6 +25,8 @@ class CrowdSim(gym.Env):
         self.time_step = None
         self.robot = None
         self.humans = None
+        self.groups = None
+        self.group_affiliations = None
         self.global_time = None
         self.human_times = None
         # reward function
@@ -43,6 +45,7 @@ class CrowdSim(gym.Env):
         self.square_width = None
         self.circle_radius = None
         self.human_num = None
+        self.group_num = None
         # for visualization
         self.states = None
         self.action_values = None
@@ -100,6 +103,18 @@ class CrowdSim(gym.Env):
             self.humans = []
             for i in range(human_num):
                 self.humans.append(self.generate_circle_crossing_human())
+        elif rule == 'group_circle_crossing':
+            self.humans = []
+            self.groups = []
+            self.group_affiliations = []
+            for i in range(group_num):
+                self.groups.append(self.generate_circle_crossing_group())
+                self.group_affiliations.append([])
+            for i in range(human_num):
+                # pick a group for the human to be in
+                group_ind = np.random.randint(group_num)
+                group_affiliations[group_ind].append(i)
+                self.humans.append(self.generate_grouped_human(groups[group_ind]))
         elif rule == 'mixed':
             # mix different raining simulation with certain distribution
             static_human_num = {0: 0.05, 1: 0.2, 2: 0.2, 3: 0.3, 4: 0.1, 5: 0.15}
@@ -199,6 +214,53 @@ class CrowdSim(gym.Env):
             collide = False
             for agent in [self.robot] + self.humans:
                 if norm((gx - agent.gx, gy - agent.gy)) < human.radius + agent.radius + self.discomfort_dist:
+                    collide = True
+                    break
+            if not collide:
+                break
+        human.set(px, py, gx, gy, 0, 0, 0)
+        return human
+
+    def generate_circle_crossing_group(self):
+        group = Group(self.config, 'groups')
+        if self.randomize_attributes:
+            group.sample_random_attributes()
+        while True:
+            angle = np.random.random() * np.pi * 2
+            # add some noise to simulate all the possible cases robot could meet with group
+            px_noise = (np.random.random() - 0.5) * group.v_pref
+            py_noise = (np.random.random() - 0.5) * group.v_pref
+            px = self.circle_radius * np.cos(angle) + px_noise
+            py = self.circle_radius * np.sin(angle) + py_noise
+            collide = False
+            for agent in [self.robot] + self.groups:
+                min_dist = group.radius + agent.radius + self.discomfort_dist
+                if norm((px - agent.px, py - agent.py)) < min_dist or \
+                        norm((px - agent.gx, py - agent.gy)) < min_dist:
+                    collide = True
+                    break
+            if not collide:
+                break
+        group.set(px, py, -px, -py, 0, 0, 0)
+        return group
+        
+        def generate_grouped_human(self, group):
+        human = Human(self.config, 'humans')
+        if self.randomize_attributes:
+            human.sample_random_attributes()
+        while True:
+            angle = np.random.random() * np.pi * 2
+            # assume a gaussian distribution of people within a group
+            noise = np.random.normal(scale=group.stdev)
+            px = group.px + noise * np.cos(angle)
+            py = group.py + noise * np.sin(angle)
+            gx = group.gx + noise * np.cos(angle)
+            gy = group.gy + noise * np.sin(angle)
+            collide = False
+            for agent in [self.robot] + self.humans:
+                min_dist = human.radius + agent.radius + self.discomfort_dist
+                if norm((px - agent.px, py - agent.py)) < min_dist or \
+                        norm((px - agent.gx, py - agent.gy)) < min_dist:
                     collide = True
                     break
             if not collide:
