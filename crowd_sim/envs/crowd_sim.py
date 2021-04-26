@@ -49,6 +49,7 @@ class CrowdSim(gym.Env):
 
         # simulation configuration
         self.config = None
+        self.policy = None
         self.case_capacity = None
         self.case_size = None
         self.case_counter = None
@@ -60,6 +61,7 @@ class CrowdSim(gym.Env):
         self.human_num = None
         self.group_num = None
         self.one_group = None
+
         # for visualization
         self.states = None
         self.action_values = None
@@ -72,6 +74,7 @@ class CrowdSim(gym.Env):
         self.time_limit = config.getint('env', 'time_limit')
         self.time_step = config.getfloat('env', 'time_step')
         self.randomize_attributes = config.getboolean('env', 'randomize_attributes')
+        self.policy = self.config.get('humans', 'policy')
 
         # reward function
         self.success_reward = config.getfloat('old_reward', 'success_reward')
@@ -87,7 +90,7 @@ class CrowdSim(gym.Env):
 
         # simulation configuration
         # orca policy
-        if self.config.get('humans', 'policy') == 'orca':
+        if self.policy == 'orca':
             self.case_capacity = {'train': np.iinfo(np.uint32).max - 2000, 'val': 1000, 'test': 1000}
             self.case_size = {'train': np.iinfo(np.uint32).max - 2000, 'val': config.getint('env', 'val_size'),
                               'test': config.getint('env', 'test_size')}
@@ -96,20 +99,19 @@ class CrowdSim(gym.Env):
             self.square_width = config.getfloat('sim', 'square_width')
             self.circle_radius = config.getfloat('sim', 'circle_radius')
             self.human_num = config.getint('sim', 'human_num')
-
         # extended social force policy
-        elif self.config.get('humans', 'policy') == 'psf':
+        elif self.policy == 'psf':
             self.train_val_sim = config.get('sim', 'train_val_sim')
             self.test_sim = config.get('sim', 'test_sim')
             self.circle_radius = config.getfloat('sim', 'circle_radius')
             self.human_num = config.getint('sim', 'human_num')
             self.one_group = config.getboolean('sim', 'one_group')
-
         # other policy
         else:
             raise NotImplementedError
-        self.case_counter = {'train': 0, 'test': 0, 'val': 0}
 
+        # logging
+        self.case_counter = {'train': 0, 'test': 0, 'val': 0}
         logging.info('human number: {}'.format(self.human_num))
         if self.randomize_attributes:
             logging.info("Randomize human's radius and preferred speed")
@@ -416,22 +418,14 @@ class CrowdSim(gym.Env):
 
         # initiate pysocialforce simulator
         initial_state = np.zeros((self.human_num, 6))
-        for i in range(self.human_num):
-            human = self.humans[i]
-            px, py = human.get_position()
-            vx, vy = human.get_velocity()
-            gx, gy = human.get_goal_position()
-            initial_state[i, :] = np.array([px, py, vx, vy, gx, gy])
-
+        for i, human in enumerate(self.humans):
+          initial_state[i, :] = np.array([human.px, human.py, human.vx+0.1, human.vy+0.1, human.gx, human.gy])
         self.psf = psf.Simulator(
             state=initial_state,
             groups=self.groups,
             obstacles=None,
             config_file="../pysocialforce/config/default.toml"
         )
-        # ped_states, group_states = s.get_states()
-        # print(ped_states)
-        # print(group_states)
 
         return ob
 
@@ -522,6 +516,15 @@ class CrowdSim(gym.Env):
 
             # update all agents
             self.robot.step(action)
+            current_state = np.zeros((self.human_num, 6))
+            for i, human in enumerate(self.humans):
+              current_state[i, :] = np.array([human.px, human.py, human.vx+0.1, human.vy+0.1, human.gx, human.gy])
+            self.psf = psf.Simulator(
+                state=current_state,
+                groups=self.groups,
+                obstacles=[[self.robot.px-self.robot.radius, self.robot.px+self.robot.radius, self.robot.py-self.robot.radius, self.robot.py+self.robot.radius]],
+                config_file="../pysocialforce/config/default.toml"
+            )
             self.psf.step(1)
             ped_states, group_states = self.psf.get_states()
             for i in range(self.human_num):
