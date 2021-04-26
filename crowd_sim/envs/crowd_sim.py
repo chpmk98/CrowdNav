@@ -3,8 +3,10 @@ import gym
 import matplotlib.lines as mlines
 import numpy as np
 import rvo2
+import random
 from matplotlib import patches
 from numpy.linalg import norm
+from scipy.stats import poisson
 from crowd_sim.envs.utils.human import Human
 from crowd_sim.envs.utils.info import *
 from crowd_sim.envs.utils.utils import point_to_segment_dist
@@ -21,19 +23,27 @@ class CrowdSim(gym.Env):
         robot is controlled by a known and learnable policy.
 
         """
+        # environment configuration
         self.time_limit = None
         self.time_step = None
         self.robot = None
         self.humans = None
         self.groups = None
-        self.group_affiliations = None
+        self.group_objs = None
         self.global_time = None
         self.human_times = None
+
         # reward function
+        # self.success_reward = None
+        # self.collision_penalty = None
+        # self.discomfort_dist = None
+        # self.discomfort_penalty_factor = None
+        self.progress_reward = None
         self.success_reward = None
+        self.discomfort_penalty = None
         self.collision_penalty = None
-        self.discomfort_dist = None
-        self.discomfort_penalty_factor = None
+        self.group_penalty = None
+
         # simulation configuration
         self.config = None
         self.case_capacity = None
@@ -46,6 +56,7 @@ class CrowdSim(gym.Env):
         self.circle_radius = None
         self.human_num = None
         self.group_num = None
+        self.one_group = None
         # for visualization
         self.states = None
         self.action_values = None
@@ -53,13 +64,25 @@ class CrowdSim(gym.Env):
 
     def configure(self, config):
         self.config = config
+
+        # environment configuration
         self.time_limit = config.getint('env', 'time_limit')
         self.time_step = config.getfloat('env', 'time_step')
         self.randomize_attributes = config.getboolean('env', 'randomize_attributes')
+
+        # reward function
+        # self.success_reward = config.getfloat('reward', 'success_reward')
+        # self.collision_penalty = config.getfloat('reward', 'collision_penalty')
+        # self.discomfort_dist = config.getfloat('reward', 'discomfort_dist')
+        # self.discomfort_penalty_factor = config.getfloat('reward', 'discomfort_penalty_factor')
+        self.progress_reward = config.getfloat('reward', 'progress_reward')
         self.success_reward = config.getfloat('reward', 'success_reward')
+        self.discomfort_penalty = config.getfloat('reward', 'discomfort_penalty')
         self.collision_penalty = config.getfloat('reward', 'collision_penalty')
-        self.discomfort_dist = config.getfloat('reward', 'discomfort_dist')
-        self.discomfort_penalty_factor = config.getfloat('reward', 'discomfort_penalty_factor')
+        self.group_penalty = config.getfloat('reward', 'group_penalty')
+
+        # simulation configuration
+        # orca policy
         if self.config.get('humans', 'policy') == 'orca':
             self.case_capacity = {'train': np.iinfo(np.uint32).max - 2000, 'val': 1000, 'test': 1000}
             self.case_size = {'train': np.iinfo(np.uint32).max - 2000, 'val': config.getint('env', 'val_size'),
@@ -69,6 +92,15 @@ class CrowdSim(gym.Env):
             self.square_width = config.getfloat('sim', 'square_width')
             self.circle_radius = config.getfloat('sim', 'circle_radius')
             self.human_num = config.getint('sim', 'human_num')
+        # extended social force policy
+        elif self.config.get('humans', 'policy') == 'psf':
+            self.train_val_sim = config.get('sim', 'train_val_sim')
+            self.test_sim = config.get('sim', 'test_sim')
+            self.square_width = config.getfloat('sim', 'square_width')
+            self.circle_radius = config.getfloat('sim', 'circle_radius')
+            self.human_num = config.getint('sim', 'human_num')
+            self.one_group = config.getboolean('sim', 'one_group')
+        # other policy
         else:
             raise NotImplementedError
         self.case_counter = {'train': 0, 'test': 0, 'val': 0}
@@ -94,6 +126,9 @@ class CrowdSim(gym.Env):
         :param rule:
         :return:
         """
+        # generate groups of pedestrians
+        #self.generate_groups() # !! I think I actually overwrite most of ur variables T-T
+
         # initial min separation distance to avoid danger penalty at beginning
         if rule == 'square_crossing':
             self.humans = []
@@ -104,17 +139,18 @@ class CrowdSim(gym.Env):
             for i in range(human_num):
                 self.humans.append(self.generate_circle_crossing_human())
         elif rule == 'group_circle_crossing':
+            group_num = self.config.getint('sim', 'group_num')
             self.humans = []
+            self.group_objs = []
             self.groups = []
-            self.group_affiliations = []
             for i in range(group_num):
-                self.groups.append(self.generate_circle_crossing_group())
-                self.group_affiliations.append([])
+                self.group_objs.append(self.generate_circle_crossing_group())
+                self.groups.append([])
             for i in range(human_num):
                 # pick a group for the human to be in
                 group_ind = np.random.randint(group_num)
-                group_affiliations[group_ind].append(i)
-                self.humans.append(self.generate_grouped_human(groups[group_ind]))
+                groups[group_ind].append(i)
+                self.humans.append(self.generate_grouped_human(group_objs[group_ind]))
         elif rule == 'mixed':
             # mix different raining simulation with certain distribution
             static_human_num = {0: 0.05, 1: 0.2, 2: 0.2, 3: 0.3, 4: 0.1, 5: 0.15}
@@ -166,6 +202,28 @@ class CrowdSim(gym.Env):
                     self.humans.append(human)
         else:
             raise ValueError("Rule doesn't exist")
+
+    def chunk(xs, n):
+        ys = list(xs)
+        random.shuffle(ys)
+        ylen = len(ys)
+        size = int(ylen / n)
+        chunks = [ys[0+size*i : size*(i+1)] for i in range(n)]
+        leftover = ylen - size*n
+        edge = size*n
+        for i in range(leftover):
+                chunks[i%n].append(ys[edge+i])
+        return chunks
+
+    def generate_groups(self):
+        human_indices = range(self.human_num)
+        if self.one_group:
+            self.groups = list(human_indices)
+        else:
+            num_groups = poisson.rvs(1.2)
+            if (num_groups <= 0) or (num_groups > human_num):
+                num_groups = self.human_num
+            self.groups = list(chunk(human_indices, num_groups))
 
     def generate_circle_crossing_human(self):
         human = Human(self.config, 'humans')
