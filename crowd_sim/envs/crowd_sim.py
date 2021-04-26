@@ -415,23 +415,23 @@ class CrowdSim(gym.Env):
             raise NotImplementedError
 
         # initiate pysocialforce simulator
-        initial_state = np.zeros((self.humans_num, 6))
-        for i in range(self.humans_num):
+        initial_state = np.zeros((self.human_num, 6))
+        for i in range(self.human_num):
             human = self.humans[i]
             px, py = human.get_position()
             vx, vy = human.get_velocity()
             gx, gy = human.get_goal_position()
             initial_state[i, :] = np.array([px, py, vx, vy, gx, gy])
 
-        s = psf.Simulator(
-            initial_state=initial_state,
+        self.psf = psf.Simulator(
+            state=initial_state,
             groups=self.groups,
             obstacles=None,
-            config_file="config/default.toml",
+            config_file="../pysocialforce/config/default.toml"
         )
-        ped_states, group_states = s.get_states()
-        print(ped_states)
-        print(group_states)
+        # ped_states, group_states = s.get_states()
+        # print(ped_states)
+        # print(group_states)
 
         return ob
 
@@ -443,13 +443,13 @@ class CrowdSim(gym.Env):
         Compute actions for all agents, detect collision, update environment and return (ob, reward, done, info)
 
         """
-        human_actions = []
-        for human in self.humans:
-            # observation for humans is always coordinates
-            ob = [other_human.get_observable_state() for other_human in self.humans if other_human != human]
-            if self.robot.visible:
-                ob += [self.robot.get_observable_state()]
-            human_actions.append(human.act(ob))
+        # human_actions = []
+        # for human in self.humans:
+        #     # observation for humans is always coordinates
+        #     ob = [other_human.get_observable_state() for other_human in self.humans if other_human != human]
+        #     if self.robot.visible:
+        #         ob += [self.robot.get_observable_state()]
+        #     human_actions.append(human.act(ob))
 
         # collision detection
         dmin = float('inf')
@@ -522,8 +522,14 @@ class CrowdSim(gym.Env):
 
             # update all agents
             self.robot.step(action)
-            for i, human_action in enumerate(human_actions):
-                self.humans[i].step(human_action)
+            self.psf.step(1)
+            ped_states, group_states = self.psf.get_states()
+            for i in range(self.human_num):
+                [px, py, vx, vy, gx, gy, tau] = ped_states[-1, i, :]
+                self.humans[i].set_position([px, py])
+                self.humans[i].set_velocity([vx, vy])
+            # for i, human_action in enumerate(human_actions):
+            #     self.humans[i].step(human_action)
             self.global_time += self.time_step
             for i, human in enumerate(self.humans):
                 # only record the first time the human reaches the goal
