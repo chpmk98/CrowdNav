@@ -8,6 +8,7 @@ from matplotlib import patches
 from numpy.linalg import norm
 from scipy.stats import poisson
 from crowd_sim.envs.utils.human import Human
+from crowd_sim.envs.utils.group import Group
 from crowd_sim.envs.utils.info import *
 from crowd_sim.envs.utils.utils import point_to_segment_dist
 
@@ -73,8 +74,8 @@ class CrowdSim(gym.Env):
         # reward function
         # self.success_reward = config.getfloat('reward', 'success_reward')
         # self.collision_penalty = config.getfloat('reward', 'collision_penalty')
-        # self.discomfort_dist = config.getfloat('reward', 'discomfort_dist')
-        # self.discomfort_penalty_factor = config.getfloat('reward', 'discomfort_penalty_factor')
+        self.discomfort_dist = config.getfloat('old_reward', 'discomfort_dist')
+        self.discomfort_penalty_factor = config.getfloat('old_reward', 'discomfort_penalty_factor')
         self.progress_reward = config.getfloat('reward', 'progress_reward')
         self.success_reward = config.getfloat('reward', 'success_reward')
         self.discomfort_penalty = config.getfloat('reward', 'discomfort_penalty')
@@ -149,8 +150,8 @@ class CrowdSim(gym.Env):
             for i in range(human_num):
                 # pick a group for the human to be in
                 group_ind = np.random.randint(group_num)
-                groups[group_ind].append(i)
-                self.humans.append(self.generate_grouped_human(group_objs[group_ind]))
+                self.groups[group_ind].append(i)
+                self.humans.append(self.generate_grouped_human(self.group_objs[group_ind]))
         elif rule == 'mixed':
             # mix different raining simulation with certain distribution
             static_human_num = {0: 0.05, 1: 0.2, 2: 0.2, 3: 0.3, 4: 0.1, 5: 0.15}
@@ -280,29 +281,29 @@ class CrowdSim(gym.Env):
         return human
 
     def generate_circle_crossing_group(self):
-        group = Group(self.config, 'groups')
+        groupBoi = Group(self.config, 'groups')
         if self.randomize_attributes:
-            group.sample_random_attributes()
+            groupBoi.sample_random_attributes()
         while True:
             angle = np.random.random() * np.pi * 2
             # add some noise to simulate all the possible cases robot could meet with group
-            px_noise = (np.random.random() - 0.5) * group.v_pref
-            py_noise = (np.random.random() - 0.5) * group.v_pref
+            px_noise = (np.random.random() - 0.5) * groupBoi.v_pref
+            py_noise = (np.random.random() - 0.5) * groupBoi.v_pref
             px = self.circle_radius * np.cos(angle) + px_noise
             py = self.circle_radius * np.sin(angle) + py_noise
             collide = False
-            for agent in [self.robot] + self.groups:
-                min_dist = group.radius + agent.radius + self.discomfort_dist
+            for agent in [self.robot] + self.group_objs:
+                min_dist = groupBoi.radius + agent.radius + self.discomfort_dist
                 if norm((px - agent.px, py - agent.py)) < min_dist or \
                         norm((px - agent.gx, py - agent.gy)) < min_dist:
                     collide = True
                     break
             if not collide:
                 break
-        group.set(px, py, -px, -py, 0, 0, 0)
-        return group
+        groupBoi.set(px, py, -px, -py, 0, 0, 0)
+        return groupBoi
         
-        def generate_grouped_human(self, group):
+    def generate_grouped_human(self, group):
         human = Human(self.config, 'humans')
         if self.randomize_attributes:
             human.sample_random_attributes()
