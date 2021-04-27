@@ -36,10 +36,11 @@ class CrowdSim(gym.Env):
         self.human_times = None
 
         # reward function
-        # self.success_reward = None
-        # self.collision_penalty = None
-        # self.discomfort_dist = None
-        # self.discomfort_penalty_factor = None
+        self.success_reward = None
+        self.collision_penalty = None
+        self.discomfort_dist = None
+        self.discomfort_penalty_factor = None
+
         self.progress_reward = None
         self.success_reward = None
         self.discomfort_penalty = None
@@ -48,6 +49,7 @@ class CrowdSim(gym.Env):
 
         # simulation configuration
         self.config = None
+        self.enable_psf = None
         self.case_capacity = None
         self.case_size = None
         self.case_counter = None
@@ -58,7 +60,7 @@ class CrowdSim(gym.Env):
         self.circle_radius = None
         self.human_num = None
         self.group_num = None
-        self.one_group = None
+
         # for visualization
         self.states = None
         self.action_values = None
@@ -71,12 +73,14 @@ class CrowdSim(gym.Env):
         self.time_limit = config.getint('env', 'time_limit')
         self.time_step = config.getfloat('env', 'time_step')
         self.randomize_attributes = config.getboolean('env', 'randomize_attributes')
+        self.enable_psf = config.getboolean('humans', 'enable_psf')
 
         # reward function
-        # self.success_reward = config.getfloat('reward', 'success_reward')
-        # self.collision_penalty = config.getfloat('reward', 'collision_penalty')
+        self.success_reward = config.getfloat('old_reward', 'success_reward')
+        self.collision_penalty = config.getfloat('old_reward', 'collision_penalty')
         self.discomfort_dist = config.getfloat('old_reward', 'discomfort_dist')
         self.discomfort_penalty_factor = config.getfloat('old_reward', 'discomfort_penalty_factor')
+
         self.progress_reward = config.getfloat('reward', 'progress_reward')
         self.success_reward = config.getfloat('reward', 'success_reward')
         self.discomfort_penalty = config.getfloat('reward', 'discomfort_penalty')
@@ -84,29 +88,21 @@ class CrowdSim(gym.Env):
         self.group_penalty = config.getfloat('reward', 'group_penalty')
 
         # simulation configuration
-        # orca policy
-        if self.config.get('humans', 'policy') == 'orca':
+        if config.get('humans', 'policy') == 'orca':
             self.case_capacity = {'train': np.iinfo(np.uint32).max - 2000, 'val': 1000, 'test': 1000}
             self.case_size = {'train': np.iinfo(np.uint32).max - 2000, 'val': config.getint('env', 'val_size'),
                               'test': config.getint('env', 'test_size')}
             self.train_val_sim = config.get('sim', 'train_val_sim')
             self.test_sim = config.get('sim', 'test_sim')
-            self.square_width = config.getfloat('sim', 'square_width')
             self.circle_radius = config.getfloat('sim', 'circle_radius')
-            self.human_num = config.getint('sim', 'human_num')
-        # extended social force policy
-        elif self.config.get('humans', 'policy') == 'psf':
-            self.train_val_sim = config.get('sim', 'train_val_sim')
-            self.test_sim = config.get('sim', 'test_sim')
             self.square_width = config.getfloat('sim', 'square_width')
-            self.circle_radius = config.getfloat('sim', 'circle_radius')
             self.human_num = config.getint('sim', 'human_num')
-            self.one_group = config.getboolean('sim', 'one_group')
-        # other policy
+
         else:
             raise NotImplementedError
-        self.case_counter = {'train': 0, 'test': 0, 'val': 0}
 
+        # logging
+        self.case_counter = {'train': 0, 'test': 0, 'val': 0}
         logging.info('human number: {}'.format(self.human_num))
         if self.randomize_attributes:
             logging.info("Randomize human's radius and preferred speed")
@@ -412,6 +408,26 @@ class CrowdSim(gym.Env):
         elif self.robot.sensor == 'RGB':
             raise NotImplementedError
 
+        # initiate pysocialforce simulator
+        if self.enable_psf:
+            if self.robot.visible:
+                initial_state = np.zeros((self.human_num+1, 6))
+                for i, human in enumerate(self.humans):
+                  initial_state[i, :] = np.array([human.px, human.py, human.vx+0.1, human.vy+0.1, human.gx, human.gy])
+                initial_state[self.human_num, :] = np.array([self.robot.px, self.robot.py, self.robot.vx+0.1, self.robot.vy+0.1, self.robot.gx, self.robot.gy])
+                groups = self.groups.append([self.human_num])
+            else:
+                initial_state = np.zeros((self.human_num, 6))
+                for i, human in enumerate(self.humans):
+                  initial_state[i, :] = np.array([human.px, human.py, human.vx+0.1, human.vy+0.1, human.gx, human.gy])
+                groups = self.groups
+            self.psf_sim = psf.Simulator(
+                state=initial_state,
+                groups=groups,
+                obstacles=None,
+                config_file="../pysocialforce/config/default.toml"
+            )
+
         return ob
 
     def onestep_lookahead(self, action):
@@ -422,14 +438,6 @@ class CrowdSim(gym.Env):
         Compute actions for all agents, detect collision, update environment and return (ob, reward, done, info)
 
         """
-        human_actions = []
-        for human in self.humans:
-            # observation for humans is always coordinates
-            ob = [other_human.get_observable_state() for other_human in self.humans if other_human != human]
-            if self.robot.visible:
-                ob += [self.robot.get_observable_state()]
-            human_actions.append(human.act(ob))
-
         # collision detection
         dmin = float('inf')
         collision = False
@@ -499,10 +507,33 @@ class CrowdSim(gym.Env):
             if hasattr(self.robot.policy, 'get_attention_weights'):
                 self.attention_weights.append(self.robot.policy.get_attention_weights())
 
-            # update all agents
+            # update robot
             self.robot.step(action)
-            for i, human_action in enumerate(human_actions):
-                self.humans[i].step(human_action)
+
+            # update human: pysocialforce
+            if self.enable_psf:
+                self.psf_sim.step(3)
+                ped_states, group_states = self.psf_sim.get_states()
+                for i in range(self.human_num):
+                    [px, py, vx, vy, gx, gy, tau] = ped_states[-1, i, :]
+                    self.humans[i].set_position([px, py])
+                    self.humans[i].set_velocity([vx, vy])
+                if self.robot.visible:
+                    self.psf_sim.peds.state[self.human_num, :] = np.array([self.robot.px,
+                    self.robot.py, self.robot.vx, self.robot.vy, self.robot.gx, self.robot.gy, 0.5])
+
+            # update human: orca
+            else:
+                human_actions = []
+                for human in self.humans:
+                    # observation for humans is always coordinates
+                    ob = [other_human.get_observable_state() for other_human in self.humans if other_human != human]
+                    if self.robot.visible:
+                        ob += [self.robot.get_observable_state()]
+                    human_actions.append(human.act(ob))
+                for i, human_action in enumerate(human_actions):
+                    self.humans[i].step(human_action)
+
             self.global_time += self.time_step
             for i, human in enumerate(self.humans):
                 # only record the first time the human reaches the goal
