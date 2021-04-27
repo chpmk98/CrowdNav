@@ -272,6 +272,7 @@ class CrowdSim(gym.Env):
     def generate_circle_crossing_group(self, num_peds=1):
         groupBoi = Group(self.config, 'groups')
         groupBoi.radius *= np.sqrt(num_peds) # scale group size by the number of people in the group
+        groupBoi.stdev *= np.sqrt(num_peds)
         if self.randomize_attributes:
             groupBoi.sample_random_attributes()
         while True:
