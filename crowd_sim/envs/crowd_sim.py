@@ -8,10 +8,12 @@ import pysocialforce as psf
 from matplotlib import patches
 from numpy.linalg import norm
 from scipy.stats import poisson
+from scipy.spatial import ConvexHull
 from crowd_sim.envs.utils.human import Human
 from crowd_sim.envs.utils.group import Group
 from crowd_sim.envs.utils.info import *
 from crowd_sim.envs.utils.utils import point_to_segment_dist
+from crowd_sim.envs.utils.utils import dist
 
 
 class CrowdSim(gym.Env):
@@ -38,7 +40,7 @@ class CrowdSim(gym.Env):
         # reward function
         self.success_reward = None
         self.collision_penalty = None
-        self.discomfort_dist = None
+        self.disccomfort_dist = None
         self.discomfort_penalty_factor = None
 
         self.progress_reward = None
@@ -46,6 +48,8 @@ class CrowdSim(gym.Env):
         self.discomfort_penalty = None
         self.collision_penalty = None
         self.group_penalty = None
+        self.collision_dist = None
+        self.discomfort_dist = None
 
         # simulation configuration
         self.config = None
@@ -79,7 +83,7 @@ class CrowdSim(gym.Env):
         # reward function
         self.success_reward = config.getfloat('old_reward', 'success_reward')
         self.collision_penalty = config.getfloat('old_reward', 'collision_penalty')
-        self.discomfort_dist = config.getfloat('old_reward', 'discomfort_dist')
+        self.disccomfort_dist = config.getfloat('old_reward', 'discomfort_dist')
         self.discomfort_penalty_factor = config.getfloat('old_reward', 'discomfort_penalty_factor')
 
         self.progress_reward = config.getfloat('reward', 'progress_reward')
@@ -87,6 +91,8 @@ class CrowdSim(gym.Env):
         self.discomfort_penalty = config.getfloat('reward', 'discomfort_penalty')
         self.collision_penalty = config.getfloat('reward', 'collision_penalty')
         self.group_penalty = config.getfloat('reward', 'group_penalty')
+        self.collision_dist = config.getfloat('reward', 'collision_dist')
+        self.discomfort_dist = config.getfloat('reward', 'discomfort_dist')
 
         # simulation configuration
         if config.get('humans', 'policy') == 'orca':
@@ -126,9 +132,6 @@ class CrowdSim(gym.Env):
         :param rule:
         :return:
         """
-        # generate groups of pedestrians
-        #self.generate_groups() # !! I think I actually overwrite most of ur variables T-T
-
         # initial min separation distance to avoid danger penalty at beginning
         if rule == 'square_crossing':
             self.humans = []
@@ -139,18 +142,18 @@ class CrowdSim(gym.Env):
             for i in range(human_num):
                 self.humans.append(self.generate_circle_crossing_human())
         elif rule == 'group_circle_crossing':
-            group_num = poisson.rvs(1.2)
-            if (group_num <= 0) or (group_num > self.human_num):
-                group_num = self.human_num
+            self.group_num = poisson.rvs(1.2)
+            if (self.group_num <= 0) or (self.group_num > self.human_num):
+                self.group_num = self.human_num
             self.humans = []
             self.group_objs = []
             self.groups = []
-            for i in range(group_num):
+            for i in range(self.group_num):
                 self.group_objs.append(self.generate_circle_crossing_group())
                 self.groups.append([])
             for i in range(human_num):
                 # pick a group for the human to be in
-                group_ind = np.random.randint(group_num)
+                group_ind = np.random.randint(self.group_num)
                 self.groups[group_ind].append(i)
                 self.humans.append(self.generate_grouped_human(self.group_objs[group_ind]))
         elif rule == 'mixed':
@@ -186,7 +189,7 @@ class CrowdSim(gym.Env):
                         py = (np.random.random() - 0.5) * height
                         collide = False
                         for agent in [self.robot] + self.humans:
-                            if norm((px - agent.px, py - agent.py)) < human.radius + agent.radius + self.discomfort_dist:
+                            if norm((px - agent.px, py - agent.py)) < human.radius + agent.radius + self.disc_ped_dist:
                                 collide = True
                                 break
                         if not collide:
@@ -218,7 +221,7 @@ class CrowdSim(gym.Env):
             py = self.circle_radius * np.sin(angle) + py_noise
             collide = False
             for agent in [self.robot] + self.humans:
-                min_dist = human.radius + agent.radius + self.discomfort_dist
+                min_dist = human.radius + agent.radius + self.disc_ped_dist
                 if norm((px - agent.px, py - agent.py)) < min_dist or \
                         norm((px - agent.gx, py - agent.gy)) < min_dist:
                     collide = True
@@ -241,7 +244,7 @@ class CrowdSim(gym.Env):
             py = (np.random.random() - 0.5) * self.square_width
             collide = False
             for agent in [self.robot] + self.humans:
-                if norm((px - agent.px, py - agent.py)) < human.radius + agent.radius + self.discomfort_dist:
+                if norm((px - agent.px, py - agent.py)) < human.radius + agent.radius + self.disc_ped_dist:
                     collide = True
                     break
             if not collide:
@@ -251,7 +254,7 @@ class CrowdSim(gym.Env):
             gy = (np.random.random() - 0.5) * self.square_width
             collide = False
             for agent in [self.robot] + self.humans:
-                if norm((gx - agent.gx, gy - agent.gy)) < human.radius + agent.radius + self.discomfort_dist:
+                if norm((gx - agent.gx, gy - agent.gy)) < human.radius + agent.radius + self.disc_ped_dist:
                     collide = True
                     break
             if not collide:
@@ -429,128 +432,123 @@ class CrowdSim(gym.Env):
                 config_file="../pysocialforce/config/default.toml"
             )
 
+        # initialize distance of robot to goal
+        self.dgoal = [dist(self.robot.gx, self.robot.gy, self.robot.px, self.robot.py)]
+
         return ob
 
-    def onestep_lookahead(self, action):
-        return self.step(action, update=False)
-
-    def step(self, action, update=True):
+    def step(self, action):
         """
         Compute actions for all agents, detect collision, update environment and return (ob, reward, done, info)
 
         """
-        # collision detection
-        dmin = float('inf')
-        collision = False
+        # store state, action value and attention weights
+        self.states.append([self.robot.get_full_state(), [human.get_full_state() for human in self.humans]])
+        if hasattr(self.robot.policy, 'action_values'):
+            self.action_values.append(self.robot.policy.action_values)
+        if hasattr(self.robot.policy, 'get_attention_weights'):
+            self.attention_weights.append(self.robot.policy.get_attention_weights())
+
+        # update robot
+        self.robot.step(action)
+
+        # update human: pysocialforce
+        if self.enable_psf:
+            self.psf_sim.step(3)
+            ped_states, group_states = self.psf_sim.get_states()
+            for i in range(self.human_num):
+                [px, py, vx, vy, gx, gy, tau] = ped_states[-1, i, :]
+                self.humans[i].set_position([px, py])
+                self.humans[i].set_velocity([vx, vy])
+            if self.robot.visible:
+                self.psf_sim.peds.state[self.human_num, :] = np.array([self.robot.px,
+                self.robot.py, self.robot.vx, self.robot.vy, self.robot.gx, self.robot.gy, 0.5])
+
+        # update human: orca
+        else:
+            human_actions = []
+            for human in self.humans:
+                # observation for humans is always coordinates
+                ob = [other_human.get_observable_state() for other_human in self.humans if other_human != human]
+                if self.robot.visible:
+                    ob += [self.robot.get_observable_state()]
+                human_actions.append(human.act(ob))
+            for i, human_action in enumerate(human_actions):
+                self.humans[i].step(human_action)
+
+        # update global time and record the first time the human reaches the goal
+        self.global_time += self.time_step
         for i, human in enumerate(self.humans):
-            px = human.px - self.robot.px
-            py = human.py - self.robot.py
-            if self.robot.kinematics == 'holonomic':
-                vx = human.vx - action.vx
-                vy = human.vy - action.vy
+            if self.human_times[i] == 0 and human.reached_destination():
+                self.human_times[i] = self.global_time
+
+        # compute the observation
+        if self.robot.sensor == 'coordinates':
+            ob = [human.get_observable_state() for human in self.humans]
+        elif self.robot.sensor == 'RGB':
+            raise NotImplementedError
+
+        # compute distance from robot to pedestrians
+        dped = np.zeros(self.human_num)
+        for i, human in enumerate(self.humans):
+            dped[i] = dist(human.px, human.py, self.robot.px, self.robot.py)
+
+        # detect pedetrian collisions and discomfort
+        coll_ped = np.array([1 if (dped[i] < self.collision_dist) else 0 for i in range(self.human_num)])
+        disc_ped = np.array([1 if (dped[i] >= self.collision_dist) and (dped[i] < self.discomfort_dist) else 0 for i in range(self.human_num)])
+        collision = any(i==1 for i in coll_ped)
+
+        # compute distance from robot to goal
+        self.dgoal.append(dist(self.robot.gx, self.robot.gy, self.robot.px, self.robot.py))
+
+        # check if robot reached goal
+        reached_goal = 1 if (self.dgoal[-1] < self.collision_dist) else 0
+
+        # compute distance from robot to convex hull of groups
+        dgrp = np.zeros(self.group_num)
+        for j in range(self.group_num):
+            # not a group; don't care about violating group discomfort
+            if len(self.groups[j]) == 0 or len(self.groups[j]) == 1:
+                dgrp[j] = self.discomfort_dist
+            elif len(self.groups[j]) == 2:
+                human_idx = self.groups[j]
+                ped_states, _ = self.psf_sim.get_states()
+                ped_pos = ped_states[-1, human_idx, 0:2]
+                dgrp[j] = point_to_segment_dist(ped_pos[0,0], ped_pos[0,1], ped_pos[1,0], ped_pos[1,1], self.robot.px, self.robot.py)
             else:
-                vx = human.vx - action.v * np.cos(action.r + self.robot.theta)
-                vy = human.vy - action.v * np.sin(action.r + self.robot.theta)
-            ex = px + vx * self.time_step
-            ey = py + vy * self.time_step
-            # closest distance between boundaries of two agents
-            closest_dist = point_to_segment_dist(px, py, ex, ey, 0, 0) - human.radius - self.robot.radius
-            if closest_dist < 0:
-                collision = True
-                # logging.debug("Collision: distance between robot and p{} is {:.2E}".format(i, closest_dist))
-                break
-            elif closest_dist < dmin:
-                dmin = closest_dist
+                human_idx = self.groups[j]
+                ped_states, _ = self.psf_sim.get_states()
+                ped_pos = ped_states[-1, human_idx, 0:2]
+                hull = ConvexHull(ped_pos)
+                dists = []
+                vert_pos = ped_pos[hull.vertices, :]
+                for i in range(len(vert_pos) - 1):
+                    dists.append(point_to_segment_dist(vert_pos[i,0], vert_pos[i,1], vert_pos[i+1,0], vert_pos[i+1,1], self.robot.px, self.robot.py))
+                dgrp[j] = min(dists)
 
-        # collision detection between humans
-        human_num = len(self.humans)
-        for i in range(human_num):
-            for j in range(i + 1, human_num):
-                dx = self.humans[i].px - self.humans[j].px
-                dy = self.humans[i].py - self.humans[j].py
-                dist = (dx ** 2 + dy ** 2) ** (1 / 2) - self.humans[i].radius - self.humans[j].radius
-                if dist < 0:
-                    # detect collision but don't take humans' collision into account
-                    logging.debug('Collision happens between humans in step()')
+        # detect group collisions
+        coll_grp = np.array([1 if (dgrp[j] < self.collision_dist) else 0 for j in range(self.group_num)])
 
-        # check if reaching the goal
-        end_position = np.array(self.robot.compute_position(action, self.time_step))
-        reaching_goal = norm(end_position - np.array(self.robot.get_goal_position())) < self.robot.radius
+        # set reward
+        reward = self.progress_reward * (self.dgoal[-2] - self.dgoal[-1])
+        reward += self.success_reward * reached_goal
+        reward -= self.collision_penalty * coll_ped.sum()
+        reward -= self.discomfort_penalty * ((self.discomfort_dist - dped) * disc_ped).sum()
+        reward -= self.group_penalty * coll_grp.sum()
 
+        # check if simulation done
         if self.global_time >= self.time_limit - 1:
-            reward = 0
             done = True
             info = Timeout()
         elif collision:
-            reward = self.collision_penalty
             done = True
             info = Collision()
-        elif reaching_goal:
-            reward = self.success_reward
+        elif reached_goal == 1:
             done = True
             info = ReachGoal()
-        elif dmin < self.discomfort_dist:
-            # only penalize agent for getting too close if it's visible
-            # adjust the reward based on FPS
-            reward = (dmin - self.discomfort_dist) * self.discomfort_penalty_factor * self.time_step
-            done = False
-            info = Danger(dmin)
         else:
-            reward = 0
             done = False
             info = Nothing()
-
-        if update:
-            # store state, action value and attention weights
-            self.states.append([self.robot.get_full_state(), [human.get_full_state() for human in self.humans]])
-            if hasattr(self.robot.policy, 'action_values'):
-                self.action_values.append(self.robot.policy.action_values)
-            if hasattr(self.robot.policy, 'get_attention_weights'):
-                self.attention_weights.append(self.robot.policy.get_attention_weights())
-
-            # update robot
-            self.robot.step(action)
-
-            # update human: pysocialforce
-            if self.enable_psf:
-                self.psf_sim.step(3)
-                ped_states, group_states = self.psf_sim.get_states()
-                for i in range(self.human_num):
-                    [px, py, vx, vy, gx, gy, tau] = ped_states[-1, i, :]
-                    self.humans[i].set_position([px, py])
-                    self.humans[i].set_velocity([vx, vy])
-                if self.robot.visible:
-                    self.psf_sim.peds.state[self.human_num, :] = np.array([self.robot.px,
-                    self.robot.py, self.robot.vx, self.robot.vy, self.robot.gx, self.robot.gy, 0.5])
-
-            # update human: orca
-            else:
-                human_actions = []
-                for human in self.humans:
-                    # observation for humans is always coordinates
-                    ob = [other_human.get_observable_state() for other_human in self.humans if other_human != human]
-                    if self.robot.visible:
-                        ob += [self.robot.get_observable_state()]
-                    human_actions.append(human.act(ob))
-                for i, human_action in enumerate(human_actions):
-                    self.humans[i].step(human_action)
-
-            self.global_time += self.time_step
-            for i, human in enumerate(self.humans):
-                # only record the first time the human reaches the goal
-                if self.human_times[i] == 0 and human.reached_destination():
-                    self.human_times[i] = self.global_time
-
-            # compute the observation
-            if self.robot.sensor == 'coordinates':
-                ob = [human.get_observable_state() for human in self.humans]
-            elif self.robot.sensor == 'RGB':
-                raise NotImplementedError
-        else:
-            if self.robot.sensor == 'coordinates':
-                ob = [human.get_next_observable_state(action) for human, action in zip(self.humans, human_actions)]
-            elif self.robot.sensor == 'RGB':
-                raise NotImplementedError
 
         return ob, reward, done, info
 
