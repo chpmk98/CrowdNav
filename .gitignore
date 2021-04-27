@@ -12,6 +12,7 @@ venv*/
 # data
 data/
 *.mp4
+*.mov
 videos/
 
 # macos

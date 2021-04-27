@@ -102,7 +102,7 @@ def main():
             env.render('video', args.video_file)
 
         logging.info('It takes %.2f seconds to finish. Final status is %s', env.global_time, info)
-        if robot.visible and info == 'reach goal':
+        if robot.visible and str(info) == 'Reaching goal':
             human_times = env.get_human_times()
             logging.info('Average time for humans to reach goal: %.2f', sum(human_times) / len(human_times))
     else:
