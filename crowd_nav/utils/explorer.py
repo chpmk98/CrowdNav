@@ -1,6 +1,8 @@
 import logging
 import copy
 import torch
+import numpy as np
+import pandas as pd
 from crowd_sim.envs.utils.info import *
 
 
@@ -32,10 +34,17 @@ class Explorer(object):
         cumulative_rewards = []
         collision_cases = []
         timeout_cases = []
+        average_speeds = []
+        max_speeds = []
+        average_accels = []
+        max_accels = []
+        average_jerks = []
+        max_jerks = []
         for i in range(k):
             ob = self.env.reset(phase)
             done = False
             states = []
+            roboStates = []
             actions = []
             rewards = []
             while not done:
@@ -44,6 +53,7 @@ class Explorer(object):
                 states.append(self.robot.policy.last_state)
                 actions.append(action)
                 rewards.append(reward)
+                roboStates.append([float(thingy) for thingy in str(self.robot.policy.last_state.self_state).split(' ')])
 
                 if isinstance(info, Danger):
                     too_close += 1
@@ -63,6 +73,21 @@ class Explorer(object):
             else:
                 raise ValueError('Invalid end signal from environment')
 
+            roboStates = np.array(roboStates)
+            roboDF = pd.DataFrame(roboStates, columns=['px', 'py', 'vx', 'vy', 'radius', 'gx', 'gy', 'v_pref', 'theta'])
+            timeStep = self.env.time_step
+            roboDF[['ax', 'ay']] = roboDF[['vx', 'vy']].diff()/timeStep
+            roboDF[['jx', 'jy']] = roboDF[['ax', 'ay']].diff()/timeStep
+            roboDF['speed'] = np.sqrt(np.square(roboDF[['vx', 'vy']]).sum(axis=1))
+            roboDF['accel'] = np.sqrt(np.square(roboDF[['ax', 'ay']]).sum(axis=1))
+            roboDF['jerk'] = np.sqrt(np.square(roboDF[['jx', 'jy']]).sum(axis=1))
+            average_speeds.append(np.mean(roboDF['speed']))
+            max_speeds.append(np.max(roboDF['speed']))
+            average_accels.append(np.mean(roboDF['accel']))
+            max_accels.append(np.max(roboDF['accel']))
+            average_jerks.append(np.mean(roboDF['jerk']))
+            max_jerks.append(np.max(roboDF['jerk']))
+
             if update_memory:
                 if isinstance(info, ReachGoal) or isinstance(info, Collision):
                     # only add positive(success) or negative(collision) experience in experience set
@@ -76,10 +101,19 @@ class Explorer(object):
         assert success + collision + timeout == k
         avg_nav_time = sum(success_times) / len(success_times) if success_times else self.env.time_limit
 
+        ave_ave_speed = sum(average_speeds) / len(average_speeds)
+        ave_max_speed = sum(max_speeds) / len(max_speeds)
+        ave_ave_accel = sum(average_accels) / len(average_accels)
+        ave_max_accel = sum(max_accels) / len(max_accels)
+        ave_ave_jerk = sum(average_jerks) / len(average_jerks)
+        ave_max_jerk = sum(max_jerks) / len(max_jerks)
+
         extra_info = '' if episode is None else 'in episode {} '.format(episode)
         logging.info('{:<5} {}has success rate: {:.2f}, collision rate: {:.2f}, nav time: {:.2f}, total reward: {:.4f}'.
                      format(phase.upper(), extra_info, success_rate, collision_rate, avg_nav_time,
                             average(cumulative_rewards)))
+        logging.info('ave speed: {:.2f}, max speed: {:.2f}, ave accel: {:.2f}, max accel: {:.2f}, ave jerk: {:.2f}, max jerk: {:.2f}'.
+                     format(ave_ave_speed, ave_max_speed, ave_ave_accel, ave_max_accel, ave_ave_jerk, ave_max_jerk))
         if phase in ['val', 'test']:
             num_step = sum(success_times + collision_times + timeout_times) / self.robot.time_step
             logging.info('Frequency of being in danger: %.2f and average min separate distance in danger: %.2f',
