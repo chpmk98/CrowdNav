@@ -471,7 +471,7 @@ class CrowdSim(gym.Env):
 
         # update human: pysocialforce
         if self.enable_psf:
-            self.psf_sim.step(3)
+            self.psf_sim.step()
             ped_states, group_states = self.psf_sim.get_states()
             for i in range(self.human_num):
                 [px, py, vx, vy, gx, gy, tau] = ped_states[-1, i, :]
