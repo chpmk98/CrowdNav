@@ -74,7 +74,7 @@ class CrowdSim(gym.Env):
         self.time_limit = config.getint('env', 'time_limit')
         self.time_step = config.getfloat('env', 'time_step')
         self.randomize_attributes = config.getboolean('env', 'randomize_attributes')
-        self.enable_psf = self.config.getboolean('humans', 'enable_psf')
+        self.enable_psf = config.getboolean('humans', 'enable_psf')
 
         # reward function
         self.success_reward = config.getfloat('old_reward', 'success_reward')
@@ -89,7 +89,7 @@ class CrowdSim(gym.Env):
         self.group_penalty = config.getfloat('reward', 'group_penalty')
 
         # simulation configuration
-        if self.policy == 'orca':
+        if config.get('humans', 'policy') == 'orca':
             self.case_capacity = {'train': np.iinfo(np.uint32).max - 2000, 'val': 1000, 'test': 1000}
             self.case_size = {'train': np.iinfo(np.uint32).max - 2000, 'val': config.getint('env', 'val_size'),
                               'test': config.getint('env', 'test_size')}
@@ -410,7 +410,7 @@ class CrowdSim(gym.Env):
             raise NotImplementedError
 
         # initiate pysocialforce simulator
-        if enable_psf:
+        if self.enable_psf:
             if self.robot.visible:
                 initial_state = np.zeros((self.human_num+1, 6))
                 for i, human in enumerate(self.humans):
@@ -512,7 +512,7 @@ class CrowdSim(gym.Env):
             self.robot.step(action)
 
             # update human: pysocialforce
-            if enable_psf:
+            if self.enable_psf:
                 self.psf_sim.step(3)
                 ped_states, group_states = self.psf_sim.get_states()
                 for i in range(self.human_num):
