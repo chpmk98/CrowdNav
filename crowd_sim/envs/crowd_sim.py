@@ -520,6 +520,7 @@ class CrowdSim(gym.Env):
 
         # check if robot reached goal
         reached_goal = 1 if (self.dgoal[-1] < self.collision_dist) else 0
+        reach_goal = True if (self.dgoal[-1] < self.robot.radius) else False
 
         # compute distance from robot to convex hull of groups
         dgrp = np.zeros(self.group_num)
@@ -560,7 +561,7 @@ class CrowdSim(gym.Env):
         elif collision:
             done = True
             info = Collision()
-        elif reached_goal == 1:
+        elif reach_goal:
             done = True
             info = ReachGoal()
         else:
