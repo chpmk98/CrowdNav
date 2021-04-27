@@ -49,7 +49,7 @@ class CrowdSim(gym.Env):
 
         # simulation configuration
         self.config = None
-        self.policy = None
+        self.enable_psf = None
         self.case_capacity = None
         self.case_size = None
         self.case_counter = None
@@ -74,7 +74,7 @@ class CrowdSim(gym.Env):
         self.time_limit = config.getint('env', 'time_limit')
         self.time_step = config.getfloat('env', 'time_step')
         self.randomize_attributes = config.getboolean('env', 'randomize_attributes')
-        self.policy = self.config.get('humans', 'policy')
+        self.enable_psf = self.config.getboolean('humans', 'enable_psf')
 
         # reward function
         self.success_reward = config.getfloat('old_reward', 'success_reward')
@@ -89,25 +89,17 @@ class CrowdSim(gym.Env):
         self.group_penalty = config.getfloat('reward', 'group_penalty')
 
         # simulation configuration
-        # orca policy
         if self.policy == 'orca':
             self.case_capacity = {'train': np.iinfo(np.uint32).max - 2000, 'val': 1000, 'test': 1000}
             self.case_size = {'train': np.iinfo(np.uint32).max - 2000, 'val': config.getint('env', 'val_size'),
                               'test': config.getint('env', 'test_size')}
             self.train_val_sim = config.get('sim', 'train_val_sim')
             self.test_sim = config.get('sim', 'test_sim')
-            self.square_width = config.getfloat('sim', 'square_width')
-            self.circle_radius = config.getfloat('sim', 'circle_radius')
-            self.human_num = config.getint('sim', 'human_num')
-        # extended social force policy
-        elif self.policy == 'psf':
-            self.train_val_sim = config.get('sim', 'train_val_sim')
-            self.test_sim = config.get('sim', 'test_sim')
             self.circle_radius = config.getfloat('sim', 'circle_radius')
             self.square_width = config.getfloat('sim', 'square_width')
             self.human_num = config.getint('sim', 'human_num')
             self.one_group = config.getboolean('sim', 'one_group')
-        # other policy
+
         else:
             raise NotImplementedError
 
@@ -418,7 +410,7 @@ class CrowdSim(gym.Env):
             raise NotImplementedError
 
         # initiate pysocialforce simulator
-        if self.policy == 'psf':
+        if enable_psf:
             if self.robot.visible:
                 initial_state = np.zeros((self.human_num+1, 6))
                 for i, human in enumerate(self.humans):
@@ -519,29 +511,8 @@ class CrowdSim(gym.Env):
             # update robot
             self.robot.step(action)
 
-            # update human: orca
-            if self.policy == 'orca':
-                human_actions = []
-                for human in self.humans:
-                    # observation for humans is always coordinates
-                    ob = [other_human.get_observable_state() for other_human in self.humans if other_human != human]
-                    if self.robot.visible:
-                        ob += [self.robot.get_observable_state()]
-                    human_actions.append(human.act(ob))
-                current_state = np.zeros((self.human_num, 6))
-                for i, human in enumerate(self.humans):
-                  current_state[i, :] = np.array([human.px, human.py, human.vx+0.1, human.vy+0.1, human.gx, human.gy])
-                self.psf = psf.Simulator(
-                    state=current_state,
-                    groups=self.groups,
-                    obstacles=[[self.robot.px-self.robot.radius, self.robot.px+self.robot.radius, self.robot.py-self.robot.radius, self.robot.py+self.robot.radius]],
-                    config_file="../pysocialforce/config/default.toml"
-                )
-                for i, human_action in enumerate(human_actions):
-                    self.humans[i].step(human_action)
-
             # update human: pysocialforce
-            elif self.policy == 'psf':
+            if enable_psf:
                 self.psf_sim.step(3)
                 ped_states, group_states = self.psf_sim.get_states()
                 for i in range(self.human_num):
@@ -551,8 +522,20 @@ class CrowdSim(gym.Env):
                 if self.robot.visible:
                     self.psf_sim.peds.state[self.human_num, :] = np.array([self.robot.px,
                     self.robot.py, self.robot.vx, self.robot.vy, self.robot.gx, self.robot.gy, 0.5])
-                self.global_time += self.time_step
 
+            # update human: orca
+            else:
+                human_actions = []
+                for human in self.humans:
+                    # observation for humans is always coordinates
+                    ob = [other_human.get_observable_state() for other_human in self.humans if other_human != human]
+                    if self.robot.visible:
+                        ob += [self.robot.get_observable_state()]
+                    human_actions.append(human.act(ob))
+                for i, human_action in enumerate(human_actions):
+                    self.humans[i].step(human_action)
+
+            self.global_time += self.time_step
             for i, human in enumerate(self.humans):
                 # only record the first time the human reaches the goal
                 if self.human_times[i] == 0 and human.reached_destination():
