@@ -144,14 +144,19 @@ class CrowdSim(gym.Env):
             self.humans = []
             self.group_objs = []
             self.groups = []
+            # instantiate a list of humans for each group
             for i in range(group_num):
-                self.group_objs.append(self.generate_circle_crossing_group())
                 self.groups.append([])
+            # pick a group for each human to be in
             for i in range(human_num):
-                # pick a group for the human to be in
                 group_ind = np.random.randint(group_num)
                 self.groups[group_ind].append(i)
-                self.humans.append(self.generate_grouped_human(self.group_objs[group_ind]))
+            # create the groups and humans appropriately
+            for i in range(group_num):
+                if len(groups[i]) > 0:
+                    new_group = self.generate_circle_crossing_group(len(groups[i]))
+                    self.group_objs.append(new_group)
+                    self.humans.append(self.generate_grouped_human(new_group))
         elif rule == 'mixed':
             # mix different raining simulation with certain distribution
             static_human_num = {0: 0.05, 1: 0.2, 2: 0.2, 3: 0.3, 4: 0.1, 5: 0.15}
@@ -259,8 +264,9 @@ class CrowdSim(gym.Env):
         human.set(px, py, gx, gy, 0, 0, 0)
         return human
 
-    def generate_circle_crossing_group(self):
+    def generate_circle_crossing_group(self, num_peds=1):
         groupBoi = Group(self.config, 'groups')
+        groupBoi.radius *= np.sqrt(num_peds) # scale group size by the number of people in the group
         if self.randomize_attributes:
             groupBoi.sample_random_attributes()
         while True:
