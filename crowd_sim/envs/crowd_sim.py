@@ -104,6 +104,7 @@ class CrowdSim(gym.Env):
             self.train_val_sim = config.get('sim', 'train_val_sim')
             self.test_sim = config.get('sim', 'test_sim')
             self.circle_radius = config.getfloat('sim', 'circle_radius')
+            self.square_width = config.getfloat('sim', 'square_width')
             self.human_num = config.getint('sim', 'human_num')
             self.one_group = config.getboolean('sim', 'one_group')
         # other policy
@@ -417,12 +418,17 @@ class CrowdSim(gym.Env):
             raise NotImplementedError
 
         # initiate pysocialforce simulator
-        initial_state = np.zeros((self.human_num+1, 6))
-        for i, human in enumerate(self.humans):
-          initial_state[i, :] = np.array([human.px, human.py, human.vx+0.1, human.vy+0.1, human.gx, human.gy])
-        initial_state[self.human_num, :] = np.array([self.robot.px, self.robot.py, self.robot.vx+0.1, self.robot.vy+0.1, self.robot.gx, self.robot.gy])
-        groups = self.groups.append([self.human_num])
-        self.psf = psf.Simulator(
+        if self.robot.visible:
+            initial_state = np.zeros((self.human_num+1, 6))
+            for i, human in enumerate(self.humans):
+              initial_state[i, :] = np.array([human.px, human.py, human.vx+0.1, human.vy+0.1, human.gx, human.gy])
+            initial_state[self.human_num, :] = np.array([self.robot.px, self.robot.py, self.robot.vx+0.1, self.robot.vy+0.1, self.robot.gx, self.robot.gy])
+            groups = self.groups.append([self.human_num])
+        else:
+            initial_state = np.zeros((self.human_num, 6))
+            for i, human in enumerate(self.humans):
+              initial_state[i, :] = np.array([human.px, human.py, human.vx+0.1, human.vy+0.1, human.gx, human.gy])
+        self.psf_sim = psf.Simulator(
             state=initial_state,
             groups=groups,
             obstacles=None,
@@ -527,15 +533,17 @@ class CrowdSim(gym.Env):
             #     obstacles=[[self.robot.px-self.robot.radius, self.robot.px+self.robot.radius, self.robot.py-self.robot.radius, self.robot.py+self.robot.radius]],
             #     config_file="../pysocialforce/config/default.toml"
             # )
-            self.psf.step(3)
-            ped_states, group_states = self.psf.get_states()
+            # for i, human_action in enumerate(human_actions):
+            #     self.humans[i].step(human_action)
+            self.psf_sim.step(3)
+            ped_states, group_states = self.psf_sim.get_states()
             for i in range(self.human_num):
                 [px, py, vx, vy, gx, gy, tau] = ped_states[-1, i, :]
                 self.humans[i].set_position([px, py])
                 self.humans[i].set_velocity([vx, vy])
-            self.psf.peds.state[self.human_num, :] = np.array([self.robot.px, self.robot.py, self.robot.vx, self.robot.vy, self.robot.gx, self.robot.gy, 0.5])
-            # for i, human_action in enumerate(human_actions):
-            #     self.humans[i].step(human_action)
+            if self.robot.visible:
+                self.psf_sim.peds.state[self.human_num, :] = np.array([self.robot.px,
+                self.robot.py, self.robot.vx, self.robot.vy, self.robot.gx, self.robot.gy, 0.5])
             self.global_time += self.time_step
             for i, human in enumerate(self.humans):
                 # only record the first time the human reaches the goal
