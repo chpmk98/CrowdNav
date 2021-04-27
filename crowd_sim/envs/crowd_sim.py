@@ -144,7 +144,7 @@ class CrowdSim(gym.Env):
             self.humans = []
             self.group_objs = []
             self.groups = []
-            # instantiate a list of humans for each group
+            # instantiate lists of humans for each group
             for i in range(group_num):
                 self.groups.append([])
             # pick a group for each human to be in
@@ -152,11 +152,16 @@ class CrowdSim(gym.Env):
                 group_ind = np.random.randint(group_num)
                 self.groups[group_ind].append(i)
             # create the groups and humans appropriately
+            cur_human = 0
             for i in range(group_num):
-                if len(groups[i]) > 0:
-                    new_group = self.generate_circle_crossing_group(len(groups[i]))
+                if len(self.groups[i]) > 0:
+                    new_group = self.generate_circle_crossing_group(len(self.groups[i]))
                     self.group_objs.append(new_group)
-                    self.humans.append(self.generate_grouped_human(new_group))
+                    for j in range(len(self.groups[i])):
+                        self.humans.append(self.generate_grouped_human(new_group))
+                        # re-number the humans so the indices in self.groups matches self.humans
+                        self.groups[i][j] = cur_human
+                        cur_human += 1
         elif rule == 'mixed':
             # mix different raining simulation with certain distribution
             static_human_num = {0: 0.05, 1: 0.2, 2: 0.2, 3: 0.3, 4: 0.1, 5: 0.15}
