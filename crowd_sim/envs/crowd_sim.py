@@ -215,6 +215,7 @@ class CrowdSim(gym.Env):
             py_noise = (np.random.random() - 0.5) * human.v_pref
             px = self.circle_radius * np.cos(angle) + px_noise
             py = self.circle_radius * np.sin(angle) + py_noise
+            v_mult = human.v_pref/np.sqrt(px**2 + py**2)
             collide = False
             for agent in [self.robot] + self.humans:
                 min_dist = human.radius + agent.radius + self.discomfort_dist
@@ -224,7 +225,7 @@ class CrowdSim(gym.Env):
                     break
             if not collide:
                 break
-        human.set(px, py, -px, -py, 0, 0, 0)
+        human.set(px, py, -px, -py, -px * v_mult, -py * v_mult, 0)
         return human
 
     def generate_square_crossing_human(self):
@@ -269,6 +270,7 @@ class CrowdSim(gym.Env):
             py_noise = (np.random.random() - 0.5) * groupBoi.v_pref
             px = self.circle_radius * np.cos(angle) + px_noise
             py = self.circle_radius * np.sin(angle) + py_noise
+            v_mult = groupBoi.v_pref/np.sqrt(px**2 + py**2)
             collide = False
             for agent in [self.robot] + self.group_objs:
                 min_dist = groupBoi.radius + agent.radius + self.discomfort_dist
@@ -278,7 +280,7 @@ class CrowdSim(gym.Env):
                     break
             if not collide:
                 break
-        groupBoi.set(px, py, -px, -py, 0, 0, 0)
+        groupBoi.set(px, py, -px, -py, -px * v_mult, -py * v_mult, 0)
         return groupBoi
 
     def generate_grouped_human(self, group):
@@ -302,7 +304,7 @@ class CrowdSim(gym.Env):
                     break
             if not collide:
                 break
-        human.set(px, py, gx, gy, 0, 0, 0)
+        human.set(px, py, gx, gy, group.vx, group.vy, 0)
         return human
 
     def get_human_times(self):
@@ -413,13 +415,13 @@ class CrowdSim(gym.Env):
             if self.robot.visible:
                 initial_state = np.zeros((self.human_num+1, 6))
                 for i, human in enumerate(self.humans):
-                  initial_state[i, :] = np.array([human.px, human.py, human.vx+0.1, human.vy+0.1, human.gx, human.gy])
-                initial_state[self.human_num, :] = np.array([self.robot.px, self.robot.py, self.robot.vx+0.1, self.robot.vy+0.1, self.robot.gx, self.robot.gy])
+                  initial_state[i, :] = np.array([human.px, human.py, human.vx, human.vy, human.gx, human.gy])
+                initial_state[self.human_num, :] = np.array([self.robot.px, self.robot.py, self.robot.vx, self.robot.vy, self.robot.gx, self.robot.gy])
                 groups = self.groups.append([self.human_num])
             else:
                 initial_state = np.zeros((self.human_num, 6))
                 for i, human in enumerate(self.humans):
-                  initial_state[i, :] = np.array([human.px, human.py, human.vx+0.1, human.vy+0.1, human.gx, human.gy])
+                  initial_state[i, :] = np.array([human.px, human.py, human.vx, human.vy, human.gx, human.gy])
                 groups = self.groups
             self.psf_sim = psf.Simulator(
                 state=initial_state,
@@ -512,7 +514,7 @@ class CrowdSim(gym.Env):
 
             # update human: pysocialforce
             if self.enable_psf:
-                self.psf_sim.step(3)
+                self.psf_sim.step()
                 ped_states, group_states = self.psf_sim.get_states()
                 for i in range(self.human_num):
                     [px, py, vx, vy, gx, gy, tau] = ped_states[-1, i, :]
@@ -520,7 +522,7 @@ class CrowdSim(gym.Env):
                     self.humans[i].set_velocity([vx, vy])
                 if self.robot.visible:
                     self.psf_sim.peds.state[self.human_num, :] = np.array([self.robot.px,
-                    self.robot.py, self.robot.vx, self.robot.vy, self.robot.gx, self.robot.gy, 0.5])
+                    self.robot.py, self.robot.vx, self.robot.vy, self.robot.gx, self.robot.gy, self.psf_sim.peds.default_tau])
 
             # update human: orca
             else:
