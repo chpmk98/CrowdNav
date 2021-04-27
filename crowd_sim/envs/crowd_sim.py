@@ -4,6 +4,7 @@ import matplotlib.lines as mlines
 import numpy as np
 import rvo2
 import random
+import pysocialforce as psf
 from matplotlib import patches
 from numpy.linalg import norm
 from scipy.stats import poisson
@@ -283,7 +284,7 @@ class CrowdSim(gym.Env):
                 break
         groupBoi.set(px, py, -px, -py, 0, 0, 0)
         return groupBoi
-        
+
     def generate_grouped_human(self, group):
         human = Human(self.config, 'humans')
         if self.randomize_attributes:
