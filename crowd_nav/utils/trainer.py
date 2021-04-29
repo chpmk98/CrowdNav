@@ -22,6 +22,15 @@ class Trainer(object):
         logging.info('Current learning rate: %f', learning_rate)
         self.optimizer = optim.SGD(self.model.parameters(), lr=learning_rate, momentum=0.9)
 
+    def set_optimizer(self, optimizer, learning_rate, epsilon=None):
+        logging.info('Current learning rate: %f', learning_rate)
+        if optimizer == 'sgd':
+            self.optimizer = optim.SGD(self.model.parameters(), lr=learning_rate, momentum=0.9)
+        elif: optimizer == 'adam':
+            self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate, eps=epsilon)
+        else:
+            raise NotImplementedError
+
     def optimize_epoch(self, num_epochs):
         if self.optimizer is None:
             raise ValueError('Learning rate is not set!')

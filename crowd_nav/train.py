@@ -83,7 +83,9 @@ def main():
         parser.error('Train config has to be specified for a trainable network')
     train_config = configparser.RawConfigParser()
     train_config.read(args.train_config)
+    rl_optimizer = train_config.get('train', 'rl_optimizer')
     rl_learning_rate = train_config.getfloat('train', 'rl_learning_rate')
+    rl_epsilon = train_config.getfloat('train', 'rl_epsilon')
     train_batches = train_config.getint('train', 'train_batches')
     train_episodes = train_config.getint('train', 'train_episodes')
     sample_episodes = train_config.getint('train', 'sample_episodes')
@@ -103,41 +105,43 @@ def main():
     explorer = Explorer(env, robot, device, memory, policy.gamma, target_policy=policy)
 
     # imitation learning
-    if args.resume:
-        if not os.path.exists(rl_weight_file):
-            logging.error('RL weights does not exist')
-        model.load_state_dict(torch.load(rl_weight_file))
-        rl_weight_file = os.path.join(args.output_dir, 'resumed_rl_model.pth')
-        logging.info('Load reinforcement learning trained weights. Resume training')
-    elif os.path.exists(il_weight_file):
-        model.load_state_dict(torch.load(il_weight_file))
-        logging.info('Load imitation learning trained weights.')
-    else:
-        il_episodes = train_config.getint('imitation_learning', 'il_episodes')
-        il_policy = train_config.get('imitation_learning', 'il_policy')
-        il_epochs = train_config.getint('imitation_learning', 'il_epochs')
-        il_learning_rate = train_config.getfloat('imitation_learning', 'il_learning_rate')
-        trainer.set_learning_rate(il_learning_rate)
-        if robot.visible:
-            safety_space = 0
+    if enable_imitation:
+        if args.resume:
+            if not os.path.exists(rl_weight_file):
+                logging.error('RL weights does not exist')
+            model.load_state_dict(torch.load(rl_weight_file))
+            rl_weight_file = os.path.join(args.output_dir, 'resumed_rl_model.pth')
+            logging.info('Load reinforcement learning trained weights. Resume training')
+        elif os.path.exists(il_weight_file):
+            model.load_state_dict(torch.load(il_weight_file))
+            logging.info('Load imitation learning trained weights.')
         else:
-            safety_space = train_config.getfloat('imitation_learning', 'safety_space')
-        il_policy = policy_factory[il_policy]()
-        il_policy.multiagent_training = policy.multiagent_training
-        il_policy.safety_space = safety_space
-        robot.set_policy(il_policy)
-        explorer.run_k_episodes(il_episodes, 'train', update_memory=True, imitation_learning=True)
-        trainer.optimize_epoch(il_epochs)
-        torch.save(model.state_dict(), il_weight_file)
-        logging.info('Finish imitation learning. Weights saved.')
-        logging.info('Experience set size: %d/%d', len(memory), memory.capacity)
-    explorer.update_target_model(model)
+            il_episodes = train_config.getint('imitation_learning', 'il_episodes')
+            il_policy = train_config.get('imitation_learning', 'il_policy')
+            il_epochs = train_config.getint('imitation_learning', 'il_epochs')
+            il_learning_rate = train_config.getfloat('imitation_learning', 'il_learning_rate')
+            trainer.set_learning_rate(il_learning_rate)
+            if robot.visible:
+                safety_space = 0
+            else:
+                safety_space = train_config.getfloat('imitation_learning', 'safety_space')
+            il_policy = policy_factory[il_policy]()
+            il_policy.multiagent_training = policy.multiagent_training
+            il_policy.safety_space = safety_space
+            robot.set_policy(il_policy)
+            explorer.run_k_episodes(il_episodes, 'train', update_memory=True, imitation_learning=True)
+            trainer.optimize_epoch(il_epochs)
+            torch.save(model.state_dict(), il_weight_file)
+            logging.info('Finish imitation learning. Weights saved.')
+            logging.info('Experience set size: %d/%d', len(memory), memory.capacity)
+        explorer.update_target_model(model)
 
     # reinforcement learning
     policy.set_env(env)
     robot.set_policy(policy)
     robot.print_info()
-    trainer.set_learning_rate(rl_learning_rate)
+    #trainer.set_learning_rate(rl_learning_rate)
+    trainer.set_optimizer(rl_optimizer, rl_learning_rate, rl_epsilon)
     # fill the memory pool with some RL experience
     if args.resume:
         robot.policy.set_epsilon(epsilon_end)
