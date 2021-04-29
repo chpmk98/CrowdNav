@@ -83,7 +83,9 @@ def main():
         parser.error('Train config has to be specified for a trainable network')
     train_config = configparser.RawConfigParser()
     train_config.read(args.train_config)
+    rl_optimizer = train_config.get('train', 'rl_optimizer')
     rl_learning_rate = train_config.getfloat('train', 'rl_learning_rate')
+    rl_epsilon = train_config.getfloat('train', 'rl_epsilon')
     train_batches = train_config.getint('train', 'train_batches')
     train_episodes = train_config.getint('train', 'train_episodes')
     sample_episodes = train_config.getint('train', 'sample_episodes')
@@ -138,7 +140,8 @@ def main():
     policy.set_env(env)
     robot.set_policy(policy)
     robot.print_info()
-    trainer.set_learning_rate(rl_learning_rate)
+    #trainer.set_learning_rate(rl_learning_rate)
+    trainer.set_optimizer(rl_optimizer, rl_learning_rate, rl_epsilon)
     # fill the memory pool with some RL experience
     if args.resume:
         robot.policy.set_epsilon(epsilon_end)

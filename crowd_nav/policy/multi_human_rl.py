@@ -12,7 +12,6 @@ class MultiHumanRL(CADRL):
         """
         A base class for all methods that takes pairwise joint state as input to value network.
         The input to the value network is always of shape (batch_size, # humans, rotated joint state length)
-
         """
         if self.phase is None or self.device is None:
             raise AttributeError('Phase, device attributes have to be set!')
@@ -90,7 +89,6 @@ class MultiHumanRL(CADRL):
     def transform(self, state):
         """
         Take the state passed from agent and transform it to the input of value network
-
         :param state:
         :return: tensor of shape (# of humans, len(state))
         """
@@ -108,7 +106,6 @@ class MultiHumanRL(CADRL):
 
     def build_occupancy_maps(self, human_states):
         """
-
         :param human_states:
         :return: tensor of shape (# human - 1, self.cell_num ** 2)
         """
@@ -161,4 +158,3 @@ class MultiHumanRL(CADRL):
                 occupancy_maps.append([dm])
 
         return torch.from_numpy(np.concatenate(occupancy_maps, axis=0)).float()
-
