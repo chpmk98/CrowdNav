@@ -11,6 +11,7 @@ from scipy.stats import poisson
 from scipy.spatial import ConvexHull
 from crowd_sim.envs.utils.human import Human
 from crowd_sim.envs.utils.group import Group
+from crowd_sim.envs.utils.state import ObservableState
 from crowd_sim.envs.utils.info import *
 from crowd_sim.envs.utils.utils import point_to_segment_dist
 from crowd_sim.envs.utils.utils import dist
@@ -486,10 +487,12 @@ class CrowdSim(gym.Env):
             # determine next state of pedestrians
             psf_sim_tmp.step()
             ped_states, group_states = psf_sim_tmp.get_states()
-            next_obs_state = np.zeros((self.human_num, 5))
+            next_obs_state = []
+            next_obs_state_arr = np.zeros((self.human_num,5))
             for i, human in enumerate(self.humans):
                 [px, py, vx, vy, gx, gy, tau] = ped_states[-1, i, :]
-                next_obs_state[i, :] = [px, py, vx, vy, human.radius]
+                next_obs_state.append(ObservableState(px, py, vx, vy, human.radius))
+                next_obs_state_arr[i,:] = [px, py, vx, vy, human.radius]
 
         # orca
         else:
@@ -511,9 +514,9 @@ class CrowdSim(gym.Env):
 
         # compute distance from robot to pedestrians
         dped = np.zeros(self.human_num)
-        for i in range(self.humans):
-            human = next_obs_state[i, :]
-            dped[i] = dist(human[0], human[1], self.robot.px, self.robot.py)
+        for i in range(self.human_num):
+            human = next_obs_state[i]
+            dped[i] = dist(human.px, human.py, self.robot.px, self.robot.py)
 
         # detect pedetrian collisions and discomfort
         coll_ped = np.array([1 if (dped[i] < self.collision_dist) else 0 for i in range(self.human_num)])
@@ -535,11 +538,11 @@ class CrowdSim(gym.Env):
                 dgrp[j] = self.discomfort_dist
             elif len(self.groups[j]) == 2:
                 human_idx = self.groups[j]
-                ped_pos = next_obs_state[human_idx, 0:2]
+                ped_pos = next_obs_state_arr[human_idx, 0:2]
                 dgrp[j] = point_to_segment_dist(ped_pos[0,0], ped_pos[0,1], ped_pos[1,0], ped_pos[1,1], self.robot.px, self.robot.py)
             else:
                 human_idx = self.groups[j]
-                ped_pos = next_obs_state[-1, human_idx, 0:2]
+                ped_pos = next_obs_state_arr[human_idx, 0:2]
                 hull = ConvexHull(ped_pos)
                 dists = []
                 vert_pos = ped_pos[hull.vertices, :]
