@@ -7,18 +7,18 @@ from crowd_nav.policy.multi_human_rl import MultiHumanRL
 
 
 class ValueNetwork(nn.Module):
-    def __init__(self, input_dim):
+    def __init__(self, input_dim, mlp1_dims, mlp2_dims, mlp3_dims, mlp4_dims, lin1_dim, lin2_dim):
         super().__init__()
         self.input_dim = input_dim # input_dim is the variables in robot state + one human state
-        self.mlp1 = mlp(input_dim, [150, 100], last_relu=True)
-        self.mlp2 = mlp(100, [100, 50]) # input is self.mlp1
-        self.mlp3 = mlp(200, [100, 100, 1]) # input is cat(self.mlp1, mean(self.mlp1))
-        self.mlp4 = mlp(50, [150, 100, 100], last_relu=True) # input is sum(self.mlp3 * self.mlp2)
-        self.lin1 = mlp(100, [81]) # input is self.mlp4
-        self.lin2 = mlp(100, [1]) # input is self.mlp4
+        self.mlp1 = mlp(input_dim, mlp1_dims, last_relu=True)
+        self.mlp2 = mlp(mlp1_dims[-1], mlp2_dims) # input is self.mlp1
+        self.mlp3 = mlp(2*mlp1_dims[-1], mlp3_dims) # input is cat(self.mlp1, mean(self.mlp1))
+        self.mlp4 = mlp(mlp2_dims[-1], mlp4_dims, last_relu=True) # input is sum(self.mlp3 * self.mlp2)
+        self.lin1 = mlp(mlp4_dims[-1], [lin1_dim]) # input is self.mlp4
+        self.lin2 = mlp(mlp4_dims[-1], [lin2_dim]) # input is self.mlp4
         
         # used when reformatting the mean of mlp1 output
-        self.global_state_dim = 100
+        self.global_state_dim = mlp1_dims[-1]
 
     def forward(self, state):
         """
@@ -60,6 +60,13 @@ class GAP(MultiHumanRL):
         self.name = 'GAP'
 
     def configure(self, config):
-        self.input_dim = config.get('gap', 'input_dim')
-        self.model = ValueNetwork(self.input_dim) # used to be MultiHumanRL.input_dim()
+        self.set_common_parameters(config)
+        mlp1_dims = [int(x) for x in config.get('gap', 'mlp1_dims').split(', ')]
+        mlp2_dims = [int(x) for x in config.get('gap', 'mlp2_dims').split(', ')]
+        mlp3_dims = [int(x) for x in config.get('gap', 'mlp3_dims').split(', ')]
+        mlp4_dims = [int(x) for x in config.get('gap', 'mlp4_dims').split(', ')]
+        lin1_dim = config.getint('gap', 'lin1_dim')
+        lin2_dim = config.getint('gap', 'lin2_dim')
+        self.input_dim = config.getint('gap', 'input_dim')
+        self.model = ValueNetwork(self.input_dim, mlp1_dims, mlp2_dims, mlp3_dims, mlp4_dims, lin1_dim, lin2_dim) # used to use MultiHumanRL.input_dim()
         logging.info('Policy: {}'.format(self.name))
