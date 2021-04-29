@@ -454,35 +454,46 @@ class CrowdSim(gym.Env):
 
         return ob
 
-    def step(self, action):
+    def onestep_lookahead(self, action):
+        return self.step(action, update=False)
+
+    def step(self, action, update=True):
         """
         Compute actions for all agents, detect collision, update environment and return (ob, reward, done, info)
 
         """
-        # store state, action value and attention weights
-        self.states.append([self.robot.get_full_state(), [human.get_full_state() for human in self.humans]])
-        if hasattr(self.robot.policy, 'action_values'):
-            self.action_values.append(self.robot.policy.action_values)
-        if hasattr(self.robot.policy, 'get_attention_weights'):
-            self.attention_weights.append(self.robot.policy.get_attention_weights())
-
-        # update robot
-        self.robot.step(action)
-
-        # update human: pysocialforce
+        # pyscoialforce
         if self.enable_psf:
-            self.psf_sim.step()
-            ped_states, group_states = self.psf_sim.get_states()
-            for i in range(self.human_num):
-                [px, py, vx, vy, gx, gy, tau] = ped_states[-1, i, :]
-                self.humans[i].set_position([px, py])
-                self.humans[i].set_velocity([vx, vy])
+            # initiate temporary pysocialforce simulator
             if self.robot.visible:
-                self.psf_sim.peds.state[self.human_num, :] = np.array([self.robot.px,
-                self.robot.py, self.robot.vx, self.robot.vy, self.robot.gx, self.robot.gy, 0.5])
+                initial_state = np.zeros((self.human_num+1, 6))
+                for i, human in enumerate(self.humans):
+                  initial_state[i, :] = np.array([human.px, human.py, human.vx, human.vy, human.gx, human.gy])
+                initial_state[self.human_num, :] = np.array([self.robot.px, self.robot.py, self.robot.vx, self.robot.vy, self.robot.gx, self.robot.gy])
+                groups = self.groups.append([self.human_num])
+            else:
+                initial_state = np.zeros((self.human_num, 6))
+                for i, human in enumerate(self.humans):
+                  initial_state[i, :] = np.array([human.px, human.py, human.vx, human.vy, human.gx, human.gy])
+                groups = self.groups
+            psf_sim_tmp = psf.Simulator(
+                state=initial_state,
+                groups=groups,
+                obstacles=None,
+                config_file="../pysocialforce/config/default.toml"
+            )
 
-        # update human: orca
+            # determine next state of pedestrians
+            psf_sim_tmp.step()
+            ped_states, group_states = psf_sim_tmp.get_states()
+            next_obs_state = np.zeros((self.human_num, 5))
+            for i, human in enumerate(self.humans):
+                [px, py, vx, vy, gx, gy, tau] = ped_states[-1, i, :]
+                next_obs_state[i, :] = [px, py, vx, vy, human.radius]
+
+        # orca
         else:
+            # determine next state of pedestrians
             human_actions = []
             for human in self.humans:
                 # observation for humans is always coordinates
@@ -490,25 +501,19 @@ class CrowdSim(gym.Env):
                 if self.robot.visible:
                     ob += [self.robot.get_observable_state()]
                 human_actions.append(human.act(ob))
-            for i, human_action in enumerate(human_actions):
-                self.humans[i].step(human_action)
-
-        # update global time and record the first time the human reaches the goal
-        self.global_time += self.time_step
-        for i, human in enumerate(self.humans):
-            if self.human_times[i] == 0 and human.reached_destination():
-                self.human_times[i] = self.global_time
+            next_obs_state = [human.get_next_observable_state(action) for human, action in zip(self.humans, human_actions)]
 
         # compute the observation
         if self.robot.sensor == 'coordinates':
-            ob = [human.get_observable_state() for human in self.humans]
+            ob = next_obs_state
         elif self.robot.sensor == 'RGB':
             raise NotImplementedError
 
         # compute distance from robot to pedestrians
         dped = np.zeros(self.human_num)
-        for i, human in enumerate(self.humans):
-            dped[i] = dist(human.px, human.py, self.robot.px, self.robot.py)
+        for i in range(self.humans):
+            human = next_obs_state[i, :]
+            dped[i] = dist(human[0], human[1], self.robot.px, self.robot.py)
 
         # detect pedetrian collisions and discomfort
         coll_ped = np.array([1 if (dped[i] < self.collision_dist) else 0 for i in range(self.human_num)])
@@ -519,8 +524,8 @@ class CrowdSim(gym.Env):
         self.dgoal.append(dist(self.robot.gx, self.robot.gy, self.robot.px, self.robot.py))
 
         # check if robot reached goal
-        reached_goal = 1 if (self.dgoal[-1] < self.collision_dist) else 0
-        reach_goal = True if (self.dgoal[-1] < self.robot.radius) else False
+        reached_goal = 1 if (self.dgoal[-1] < self.collision_dist) else 0 # for reward
+        reach_goal = True if (self.dgoal[-1] < self.robot.radius) else False # for done
 
         # compute distance from robot to convex hull of groups
         dgrp = np.zeros(self.group_num)
@@ -530,13 +535,11 @@ class CrowdSim(gym.Env):
                 dgrp[j] = self.discomfort_dist
             elif len(self.groups[j]) == 2:
                 human_idx = self.groups[j]
-                ped_states, _ = self.psf_sim.get_states()
-                ped_pos = ped_states[-1, human_idx, 0:2]
+                ped_pos = next_obs_state[human_idx, 0:2]
                 dgrp[j] = point_to_segment_dist(ped_pos[0,0], ped_pos[0,1], ped_pos[1,0], ped_pos[1,1], self.robot.px, self.robot.py)
             else:
                 human_idx = self.groups[j]
-                ped_states, _ = self.psf_sim.get_states()
-                ped_pos = ped_states[-1, human_idx, 0:2]
+                ped_pos = next_obs_state[-1, human_idx, 0:2]
                 hull = ConvexHull(ped_pos)
                 dists = []
                 vert_pos = ped_pos[hull.vertices, :]
@@ -567,6 +570,41 @@ class CrowdSim(gym.Env):
         else:
             done = False
             info = Nothing()
+
+        # update state of system
+        if update:
+            # store state, action value and attention weights
+            self.states.append([self.robot.get_full_state(), [human.get_full_state() for human in self.humans]])
+            if hasattr(self.robot.policy, 'action_values'):
+                self.action_values.append(self.robot.policy.action_values)
+            if hasattr(self.robot.policy, 'get_attention_weights'):
+                self.attention_weights.append(self.robot.policy.get_attention_weights())
+
+            # update robot
+            self.robot.step(action)
+
+            # update human: pysocialforce
+            if self.enable_psf:
+                self.psf_sim.step()
+                ped_states, group_states = self.psf_sim.get_states()
+                for i, human in enumerate(self.humans):
+                    [px, py, vx, vy, gx, gy, tau] = ped_states[-1, i, :]
+                    human.set_position([px, py])
+                    human.set_velocity([vx, vy])
+                if self.robot.visible:
+                    self.psf_sim.peds.state[self.human_num, :] = np.array([self.robot.px,
+                    self.robot.py, self.robot.vx, self.robot.vy, self.robot.gx, self.robot.gy, 0.5])
+
+            # update human: orca
+            else:
+                for i, human_action in enumerate(human_actions):
+                    self.humans[i].step(human_action)
+
+            # update global time and record the first time the human reaches the goal
+            self.global_time += self.time_step
+            for i, human in enumerate(self.humans):
+                if self.human_times[i] == 0 and human.reached_destination():
+                    self.human_times[i] = self.global_time
 
         return ob, reward, done, info
 
