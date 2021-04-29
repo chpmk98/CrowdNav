@@ -53,7 +53,7 @@ class Explorer(object):
                 states.append(self.robot.policy.last_state)
                 actions.append(action)
                 rewards.append(reward)
-                roboStates.append([float(thingy) for thingy in str(self.robot.policy.last_state.self_state).split(' ')])
+                # roboStates.append([float(thingy) for thingy in str(self.robot.policy.last_state.self_state).split(' ')])
 
                 if isinstance(info, Danger):
                     too_close += 1
@@ -73,20 +73,20 @@ class Explorer(object):
             else:
                 raise ValueError('Invalid end signal from environment')
 
-            roboStates = np.array(roboStates)
-            roboDF = pd.DataFrame(roboStates, columns=['px', 'py', 'vx', 'vy', 'radius', 'gx', 'gy', 'v_pref', 'theta'])
-            timeStep = self.env.time_step
-            roboDF[['ax', 'ay']] = roboDF[['vx', 'vy']].diff()/timeStep
-            roboDF[['jx', 'jy']] = roboDF[['ax', 'ay']].diff()/timeStep
-            roboDF['speed'] = np.sqrt(np.square(roboDF[['vx', 'vy']]).sum(axis=1))
-            roboDF['accel'] = np.sqrt(np.square(roboDF[['ax', 'ay']]).sum(axis=1))
-            roboDF['jerk'] = np.sqrt(np.square(roboDF[['jx', 'jy']]).sum(axis=1))
-            average_speeds.append(np.mean(roboDF['speed']))
-            max_speeds.append(np.max(roboDF['speed']))
-            average_accels.append(np.mean(roboDF['accel']))
-            max_accels.append(np.max(roboDF['accel']))
-            average_jerks.append(np.mean(roboDF['jerk']))
-            max_jerks.append(np.max(roboDF['jerk']))
+            # roboStates = np.array(roboStates)
+            # roboDF = pd.DataFrame(roboStates, columns=['px', 'py', 'vx', 'vy', 'radius', 'gx', 'gy', 'v_pref', 'theta'])
+            # timeStep = self.env.time_step
+            # roboDF[['ax', 'ay']] = roboDF[['vx', 'vy']].diff()/timeStep
+            # roboDF[['jx', 'jy']] = roboDF[['ax', 'ay']].diff()/timeStep
+            # roboDF['speed'] = np.sqrt(np.square(roboDF[['vx', 'vy']]).sum(axis=1))
+            # roboDF['accel'] = np.sqrt(np.square(roboDF[['ax', 'ay']]).sum(axis=1))
+            # roboDF['jerk'] = np.sqrt(np.square(roboDF[['jx', 'jy']]).sum(axis=1))
+            # average_speeds.append(np.mean(roboDF['speed']))
+            # max_speeds.append(np.max(roboDF['speed']))
+            # average_accels.append(np.mean(roboDF['accel']))
+            # max_accels.append(np.max(roboDF['accel']))
+            # average_jerks.append(np.mean(roboDF['jerk']))
+            # max_jerks.append(np.max(roboDF['jerk']))
 
             if update_memory:
                 if isinstance(info, ReachGoal) or isinstance(info, Collision):

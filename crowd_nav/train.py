@@ -83,6 +83,7 @@ def main():
         parser.error('Train config has to be specified for a trainable network')
     train_config = configparser.RawConfigParser()
     train_config.read(args.train_config)
+    enable_imitation = train_config.getboolean('imitation_learning', 'enable_imitation')
     rl_optimizer = train_config.get('train', 'rl_optimizer')
     rl_learning_rate = train_config.getfloat('train', 'rl_learning_rate')
     rl_epsilon = train_config.getfloat('train', 'rl_epsilon')
