@@ -51,7 +51,7 @@ class ValueNetwork(nn.Module):
         pi = softmax(self.lin1(mlp4_output), dim=1) # (batch_size, self.lin1)
         val = self.lin2(mlp4_output) # (batch_size, self.lin2)
         
-        return pi, val
+        return val, pi
 
 
 class GAP(MultiHumanRL):
@@ -61,12 +61,17 @@ class GAP(MultiHumanRL):
 
     def configure(self, config):
         self.set_common_parameters(config)
+        
         mlp1_dims = [int(x) for x in config.get('gap', 'mlp1_dims').split(', ')]
         mlp2_dims = [int(x) for x in config.get('gap', 'mlp2_dims').split(', ')]
         mlp3_dims = [int(x) for x in config.get('gap', 'mlp3_dims').split(', ')]
         mlp4_dims = [int(x) for x in config.get('gap', 'mlp4_dims').split(', ')]
         lin1_dim = config.getint('gap', 'lin1_dim')
         lin2_dim = config.getint('gap', 'lin2_dim')
-        self.input_dim = config.getint('gap', 'input_dim')
-        self.model = ValueNetwork(self.input_dim, mlp1_dims, mlp2_dims, mlp3_dims, mlp4_dims, lin1_dim, lin2_dim) # used to use MultiHumanRL.input_dim()
+        
+        self.with_om = config.getboolean('gap', 'with_om')
+        self.multiagent_training = config.getboolean('gap', 'multiagent_training')
+
+        self.model = ValueNetwork(self.input_dim(), mlp1_dims, mlp2_dims, mlp3_dims, mlp4_dims, lin1_dim, lin2_dim) # uses MultiHumanRL.input_dim()
+
         logging.info('Policy: {}'.format(self.name))
