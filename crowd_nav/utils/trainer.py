@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 
 
 class Trainer(object):
-    def __init__(self, model, memory, device, batch_size):
+    def __init__(self, model, memory, device, batch_size, alg='ppo'):
         """
         Train the trainable model of a policy
         """
@@ -45,8 +45,12 @@ class Trainer(object):
                 values = Variable(values)
 
                 self.optimizer.zero_grad()
-                outputs = self.model(inputs)
-                loss = self.criterion(outputs, values)
+                if alg=='ppo':
+                    _, outputs = self.model(inputs).data.item()
+                    loss = self.criterion(outputs, values) # !! change this to ppo loss later
+                else:
+                    outputs = self.model(inputs)
+                    loss = self.criterion(outputs, values)
                 loss.backward()
                 self.optimizer.step()
                 epoch_loss += loss.data.item()
