@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 
 
 class Trainer(object):
-    def __init__(self, model, memory, device, batch_size, alg='ppo'):
+    def __init__(self, model, memory, device, batch_size):
         """
         Train the trainable model of a policy
         """
@@ -31,7 +31,7 @@ class Trainer(object):
         else:
             raise NotImplementedError
 
-    def optimize_epoch(self, num_epochs):
+    def optimize_epoch(self, num_epochs, alg='ppo'):
         if self.optimizer is None:
             raise ValueError('Learning rate is not set!')
         if self.data_loader is None:
@@ -47,7 +47,7 @@ class Trainer(object):
                 self.optimizer.zero_grad()
                 if alg=='ppo':
                     _, outputs = self.model(inputs)
-                    loss = self.criterion(outputs.data.item(), values) # !! change this to ppo loss later
+                    loss = self.criterion(outputs.data, values) # !! change this to ppo loss later
                 else:
                     outputs = self.model(inputs)
                     loss = self.criterion(outputs, values)

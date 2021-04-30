@@ -100,7 +100,7 @@ class GAP(MultiHumanRL):
 
             pi, val = self.model(rotated_batch_input)
             a = pi.sample()
-            next_action = self.action_space[a.cpu().numpy()]
+            next_action = self.action_space[int(a.cpu().numpy())]
         
         if self.phase == 'train':
             self.last_state = self.transform(state)
