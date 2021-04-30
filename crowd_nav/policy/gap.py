@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 from torch.nn.functional import softmax
+from torch.distributions import Categorical
+
 import logging
 from crowd_nav.policy.cadrl import mlp
 from crowd_nav.policy.multi_human_rl import MultiHumanRL
@@ -48,9 +50,10 @@ class ValueNetwork(nn.Module):
         
         # calculate policy and value and return
         pi = softmax(self.lin1(mlp4_output), dim=1) # (batch_size, self.lin1)
+        pi = Categorical(probs=pi)
         val = self.lin2(mlp4_output) # (batch_size, self.lin2)
         
-        return val #, pi
+        return pi, val
 
 
 class GAP(MultiHumanRL):
@@ -74,3 +77,41 @@ class GAP(MultiHumanRL):
         self.model = ValueNetwork(self.input_dim(), mlp1_dims, mlp2_dims, mlp3_dims, mlp4_dims, lin1_dim, lin2_dim) # uses MultiHumanRL.input_dim()
 
         logging.info('Policy: {}'.format(self.name))
+
+    def predict(self, state):
+        if self.phase is None or self.device is None:
+            raise AttributeError('Phase, device attributes have to be set!')
+        if self.phase == 'train' and self.epsilon is None:
+            raise AttributeError('Epsilon attribute has to be set in training phase')
+            
+        if self.reach_destination(state):
+            return ActionXY(0, 0) if self.kinematics == 'holonomic' else ActionRot(0, 0)
+        if self.action_space is None:
+            self.build_action_space(state.self_state.v_pref)
+            
+        probability = np.random.random()
+        if self.phase == 'train' and probability < self.epsilon:
+            next_action = self.action_space[np.random.choice(len(self.action_space))]
+        else:
+            batch_states = torch.cat([torch.Tensor([state.self_state + human_state]).to(self.device)
+                                              for human_state in state.human_states], dim=0)
+            rotated_batch_input = self.rotate(batch_states).unsqueeze(0)
+
+            pi, val = self.model(rotated_batch_input).data.item()
+            a = pi.sample()
+            next_action = self.action_space[a.cpu().numpy()]
+        
+        if self.phase == 'train':
+            self.last_state = self.transform(state)
+        
+        return next_action
+
+
+
+
+
+
+
+
+
+
