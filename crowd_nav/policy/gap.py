@@ -4,6 +4,7 @@ from torch.nn.functional import softmax
 from torch.distributions import Categorical
 
 import logging
+import numpy as np
 from crowd_nav.policy.cadrl import mlp
 from crowd_nav.policy.multi_human_rl import MultiHumanRL
 
@@ -97,7 +98,7 @@ class GAP(MultiHumanRL):
                                               for human_state in state.human_states], dim=0)
             rotated_batch_input = self.rotate(batch_states).unsqueeze(0)
 
-            pi, val = self.model(rotated_batch_input).data.item()
+            pi, val = self.model(rotated_batch_input)
             a = pi.sample()
             next_action = self.action_space[a.cpu().numpy()]
         

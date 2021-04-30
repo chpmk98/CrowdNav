@@ -46,8 +46,8 @@ class Trainer(object):
 
                 self.optimizer.zero_grad()
                 if alg=='ppo':
-                    _, outputs = self.model(inputs).data.item()
-                    loss = self.criterion(outputs, values) # !! change this to ppo loss later
+                    _, outputs = self.model(inputs)
+                    loss = self.criterion(outputs.data.item(), values) # !! change this to ppo loss later
                 else:
                     outputs = self.model(inputs)
                     loss = self.criterion(outputs, values)

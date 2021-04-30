@@ -40,61 +40,62 @@ class Explorer(object):
         max_accels = []
         average_jerks = []
         max_jerks = []
-        for i in range(k):
-            ob = self.env.reset(phase)
-            done = False
-            states = []
-            roboStates = []
-            actions = []
-            rewards = []
-            while not done:
-                action = self.robot.act(ob)
-                ob, reward, done, info = self.env.step(action)
-                states.append(self.robot.policy.last_state)
-                actions.append(action)
-                rewards.append(reward)
-                # roboStates.append([float(thingy) for thingy in str(self.robot.policy.last_state.self_state).split(' ')])
+        with torch.no_grad()
+            for i in range(k):
+                ob = self.env.reset(phase)
+                done = False
+                states = []
+                roboStates = []
+                actions = []
+                rewards = []
+                while not done:
+                    action = self.robot.act(ob)
+                    ob, reward, done, info = self.env.step(action)
+                    states.append(self.robot.policy.last_state)
+                    actions.append(action)
+                    rewards.append(reward)
+                    # roboStates.append([float(thingy) for thingy in str(self.robot.policy.last_state.self_state).split(' ')])
 
-                if isinstance(info, Danger):
-                    too_close += 1
-                    min_dist.append(info.min_dist)
+                    if isinstance(info, Danger):
+                        too_close += 1
+                        min_dist.append(info.min_dist)
 
-            if isinstance(info, ReachGoal):
-                success += 1
-                success_times.append(self.env.global_time)
-            elif isinstance(info, Collision):
-                collision += 1
-                collision_cases.append(i)
-                collision_times.append(self.env.global_time)
-            elif isinstance(info, Timeout):
-                timeout += 1
-                timeout_cases.append(i)
-                timeout_times.append(self.env.time_limit)
-            else:
-                raise ValueError('Invalid end signal from environment')
+                if isinstance(info, ReachGoal):
+                    success += 1
+                    success_times.append(self.env.global_time)
+                elif isinstance(info, Collision):
+                    collision += 1
+                    collision_cases.append(i)
+                    collision_times.append(self.env.global_time)
+                elif isinstance(info, Timeout):
+                    timeout += 1
+                    timeout_cases.append(i)
+                    timeout_times.append(self.env.time_limit)
+                else:
+                    raise ValueError('Invalid end signal from environment')
 
-            # roboStates = np.array(roboStates)
-            # roboDF = pd.DataFrame(roboStates, columns=['px', 'py', 'vx', 'vy', 'radius', 'gx', 'gy', 'v_pref', 'theta'])
-            # timeStep = self.env.time_step
-            # roboDF[['ax', 'ay']] = roboDF[['vx', 'vy']].diff()/timeStep
-            # roboDF[['jx', 'jy']] = roboDF[['ax', 'ay']].diff()/timeStep
-            # roboDF['speed'] = np.sqrt(np.square(roboDF[['vx', 'vy']]).sum(axis=1))
-            # roboDF['accel'] = np.sqrt(np.square(roboDF[['ax', 'ay']]).sum(axis=1))
-            # roboDF['jerk'] = np.sqrt(np.square(roboDF[['jx', 'jy']]).sum(axis=1))
-            # average_speeds.append(np.mean(roboDF['speed']))
-            # max_speeds.append(np.max(roboDF['speed']))
-            # average_accels.append(np.mean(roboDF['accel']))
-            # max_accels.append(np.max(roboDF['accel']))
-            # average_jerks.append(np.mean(roboDF['jerk']))
-            # max_jerks.append(np.max(roboDF['jerk']))
+                # roboStates = np.array(roboStates)
+                # roboDF = pd.DataFrame(roboStates, columns=['px', 'py', 'vx', 'vy', 'radius', 'gx', 'gy', 'v_pref', 'theta'])
+                # timeStep = self.env.time_step
+                # roboDF[['ax', 'ay']] = roboDF[['vx', 'vy']].diff()/timeStep
+                # roboDF[['jx', 'jy']] = roboDF[['ax', 'ay']].diff()/timeStep
+                # roboDF['speed'] = np.sqrt(np.square(roboDF[['vx', 'vy']]).sum(axis=1))
+                # roboDF['accel'] = np.sqrt(np.square(roboDF[['ax', 'ay']]).sum(axis=1))
+                # roboDF['jerk'] = np.sqrt(np.square(roboDF[['jx', 'jy']]).sum(axis=1))
+                # average_speeds.append(np.mean(roboDF['speed']))
+                # max_speeds.append(np.max(roboDF['speed']))
+                # average_accels.append(np.mean(roboDF['accel']))
+                # max_accels.append(np.max(roboDF['accel']))
+                # average_jerks.append(np.mean(roboDF['jerk']))
+                # max_jerks.append(np.max(roboDF['jerk']))
 
-            if update_memory:
-                if isinstance(info, ReachGoal) or isinstance(info, Collision):
-                    # only add positive(success) or negative(collision) experience in experience set
-                    self.update_memory(states, actions, rewards, imitation_learning)
+                if update_memory:
+                    if isinstance(info, ReachGoal) or isinstance(info, Collision):
+                        # only add positive(success) or negative(collision) experience in experience set
+                        self.update_memory(states, actions, rewards, imitation_learning)
 
-            cumulative_rewards.append(sum([pow(self.gamma, t * self.robot.time_step * self.robot.v_pref)
-                                           * reward for t, reward in enumerate(rewards)]))
+                cumulative_rewards.append(sum([pow(self.gamma, t * self.robot.time_step * self.robot.v_pref)
+                                               * reward for t, reward in enumerate(rewards)]))
 
         success_rate = success / k
         collision_rate = collision / k
