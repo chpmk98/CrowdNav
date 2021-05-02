@@ -54,7 +54,10 @@ class ValueNetwork(nn.Module):
         pi = Categorical(probs=pi)
         val = self.lin2(mlp4_output) # (batch_size, self.lin2)
         
-        return pi, val
+        # should be able to pull this out if necessary, right?
+        self.pi = pi
+        
+        return val
 
 
 class GAP(MultiHumanRL):
@@ -95,7 +98,8 @@ class GAP(MultiHumanRL):
                                           for human_state in state.human_states], dim=0)
         rotated_batch_input = self.rotate(batch_states).unsqueeze(0)
 
-        pi, val = self.model(rotated_batch_input)
+        val = self.model(rotated_batch_input)
+        pi = self.model.pi
         a = pi.sample()
         log_pi = pi.log_prob(a).cpu().numpy()
         

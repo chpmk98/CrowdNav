@@ -3,6 +3,7 @@ import copy
 import torch
 import numpy as np
 import pandas as pd
+from crowd_nav.policy.gap import GAP
 from crowd_sim.envs.utils.info import *
 
 
@@ -41,6 +42,9 @@ class Explorer(object):
         average_jerks = []
         max_jerks = []
         
+        # sometimes we do wonky PPO stuff
+        doPPO = isinstance(self.target_policy, GAP) and not imitation_learning
+        
         with torch.no_grad():
             for i in range(k):
                 ob = self.env.reset(phase)
@@ -52,8 +56,8 @@ class Explorer(object):
                 vals = []
                 log_pis = []
                 while not done:
-                    if self.target_policy == 'gap':
-                        action, val, _, log_pi = self.robot.act(ob)
+                    if doPPO:
+                        action, _, val, log_pi = self.robot.act(ob)
                         vals.append(val)
                         log_pis.append(log_pi)
                     else:
@@ -98,7 +102,7 @@ class Explorer(object):
                 # max_jerks.append(np.max(roboDF['jerk']))
 
                 # calculate advantages for ppo using GAE (Generalized Advantage Estimation)
-                if self.target_policy == 'gap':
+                if doPPO:
                     # set some GAE parameters
                     gamma = 0.99
                     lam = 0.95
@@ -116,7 +120,7 @@ class Explorer(object):
                 if update_memory:
                     if isinstance(info, ReachGoal) or isinstance(info, Collision):
                         # only add positive(success) or negative(collision) experience in experience set
-                        if self.target_policy == 'gap':
+                        if doPPO:
                             self.update_memory(states, actions, rewards, imitation_learning, vals, log_pis, advantages)
                         else:
                             self.update_memory(states, actions, rewards, imitation_learning)
@@ -188,7 +192,7 @@ class Explorer(object):
             # if human_num != 5:
             #     padding = torch.zeros((5 - human_num, feature_size))
             #     state = torch.cat([state, padding])
-            if self.env.target_policy == 'gap':
+            if isinstance(self.target_policy, GAP) and not imitation_learning:
                 self.memory.push((state, actions[i], vals[i], log_pis[i], advantages[i]))
             else:
                 self.memory.push((state, value))
