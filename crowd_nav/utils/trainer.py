@@ -46,8 +46,6 @@ class Trainer(object):
                 doPPO = len(data) > 2
                 if doPPO:
                     inputs, actions, values, log_pis, advantages = data
-                    actions = Variable(actions)
-                    log_pis = Variable(log_pis)
                     advantages = Variable(advantages)
                 else:
                     inputs, values = data
