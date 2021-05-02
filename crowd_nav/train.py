@@ -165,7 +165,7 @@ def main():
 
         # sample k episodes into memory and optimize over the generated memory
         explorer.run_k_episodes(sample_episodes, 'train', update_memory=True, episode=episode)
-        trainer.optimize_batch(train_batches, alg='ppo')
+        trainer.optimize_batch(train_batches)
         episode += 1
 
         if episode % target_update_interval == 0:

@@ -43,7 +43,8 @@ class Explorer(object):
         max_jerks = []
         
         # sometimes we do wonky PPO stuff
-        doPPO = isinstance(self.target_policy, GAP) and not imitation_learning
+        doPPO = isinstance(self.target_policy, GAP)
+        nominal_log_pi = np.log(0.7) # log probability of action used for imitation learning
         
         with torch.no_grad():
             for i in range(k):
@@ -57,7 +58,13 @@ class Explorer(object):
                 log_pis = []
                 while not done:
                     if doPPO:
-                        action, _, val, log_pi = self.robot.act(ob)
+                        # generate nominal values if doing imitation learning
+                        if imitation_learning:
+                            action = self.robot.act(ob)
+                            val = self.robot.model(ob)
+                            log_pi = nominal_log_pi
+                        else:
+                            action, _, val, log_pi = self.robot.act(ob)
                         vals.append(val)
                         log_pis.append(log_pi)
                     else:
@@ -192,7 +199,7 @@ class Explorer(object):
             # if human_num != 5:
             #     padding = torch.zeros((5 - human_num, feature_size))
             #     state = torch.cat([state, padding])
-            if isinstance(self.target_policy, GAP) and not imitation_learning:
+            if isinstance(self.target_policy, GAP):
                 self.memory.push((state, actions[i], vals[i], log_pis[i], advantages[i]))
             else:
                 self.memory.push((state, value))
