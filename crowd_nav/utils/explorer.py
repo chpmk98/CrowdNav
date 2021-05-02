@@ -112,7 +112,12 @@ class Explorer(object):
                     # set some GAE parameters
                     gamma = 0.99
                     lam = 0.95
-                    _, _, last_val, _ = self.robot.act(ob)
+                    if imitation_learning:
+                        vals = [self._compute_value(ind, rewards) for ind in range(len(states))]
+                        action = self.robot.act(ob)
+                        _, last_val, _, _ = self.env.step(action)
+                    else:
+                        _, _, last_val, _ = self.robot.act(ob)
                     last_advantage = 0
                     advantages = []
                     for t in reversed(range(len(rewards))):
@@ -165,6 +170,11 @@ class Explorer(object):
             logging.info('Collision cases: ' + ' '.join([str(x) for x in collision_cases]))
             logging.info('Timeout cases: ' + ' '.join([str(x) for x in timeout_cases]))
 
+    def _compute_value(self, i, rewards):
+        value = sum([pow(self.gamma, max(t - i, 0) * self.robot.time_step * self.robot.v_pref) * rewards[i]
+                             * (1 if t >= i else 0) for t, reward in enumerate(rewards)])
+        return value
+
     def update_memory(self, states, actions, rewards, imitation_learning=False, vals=None, log_pis=None, advantages=None):
         if self.memory is None or self.gamma is None:
             raise ValueError('Memory or gamma value is not set!')
@@ -177,8 +187,7 @@ class Explorer(object):
                 # define the value of states in IL as cumulative discounted rewards, which is the same in RL
                 state = self.target_policy.transform(state)
                 # value = pow(self.gamma, (len(states) - 1 - i) * self.robot.time_step * self.robot.v_pref)
-                value = sum([pow(self.gamma, max(t - i, 0) * self.robot.time_step * self.robot.v_pref) * reward
-                             * (1 if t >= i else 0) for t, reward in enumerate(rewards)])
+                value = self._compute_value(i, rewards)
             else:
                 if i == len(states) - 1:
                     # terminal state
@@ -199,10 +208,12 @@ class Explorer(object):
             #     padding = torch.zeros((5 - human_num, feature_size))
             #     state = torch.cat([state, padding])
             if isinstance(self.target_policy, GAP):
+                '''
                 if imitation_learning:
                     self.memory.push((state, actions[i], value, log_pis[i], advantages[i]))
                 else:
-                    self.memory.push((state, actions[i], vals[i], log_pis[i], advantages[i]))
+                '''
+                self.memory.push((state, actions[i], vals[i], log_pis[i], advantages[i]))
             else:
                 self.memory.push((state, value))
 
