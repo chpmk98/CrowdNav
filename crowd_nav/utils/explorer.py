@@ -61,11 +61,10 @@ class Explorer(object):
                         # generate nominal values if doing imitation learning
                         if imitation_learning:
                             action = self.robot.act(ob)
-                            val = self.robot.model(ob)
                             log_pi = nominal_log_pi
                         else:
                             action, _, val, log_pi = self.robot.act(ob)
-                        vals.append(val)
+                            vals.append(val)
                         log_pis.append(log_pi)
                     else:
                         action = self.robot.act(ob)
@@ -200,7 +199,10 @@ class Explorer(object):
             #     padding = torch.zeros((5 - human_num, feature_size))
             #     state = torch.cat([state, padding])
             if isinstance(self.target_policy, GAP):
-                self.memory.push((state, actions[i], vals[i], log_pis[i], advantages[i]))
+                if imitation_learning:
+                    self.memory.push((state, actions[i], value, log_pis[i], advantages[i]))
+                else:
+                    self.memory.push((state, actions[i], vals[i], log_pis[i], advantages[i]))
             else:
                 self.memory.push((state, value))
 
