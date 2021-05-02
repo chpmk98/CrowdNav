@@ -107,7 +107,7 @@ class GAP(MultiHumanRL):
         if self.phase == 'train':
             self.last_state = self.transform(state)
         
-        return next_action, pi, val, log_pi
+        return a, next_action, pi, val, log_pi
 
 
 

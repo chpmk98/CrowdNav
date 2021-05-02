@@ -56,6 +56,7 @@ class Explorer(object):
                 rewards = []
                 vals = []
                 log_pis = []
+                aas = []
                 while not done:
                     if doPPO:
                         # generate nominal values if doing imitation learning
@@ -63,7 +64,8 @@ class Explorer(object):
                             action = self.robot.act(ob)
                             log_pi = nominal_log_pi
                         else:
-                            action, _, val, log_pi = self.robot.act(ob)
+                            a, action, _, val, log_pi = self.robot.act(ob)
+                            aas.append(a)
                             vals.append(val)
                         log_pis.append(log_pi)
                     else:
@@ -117,7 +119,7 @@ class Explorer(object):
                         action = self.robot.act(ob)
                         _, last_val, _, _ = self.env.step(action)
                     else:
-                        _, _, last_val, _ = self.robot.act(ob)
+                        _, _, _, last_val, _ = self.robot.act(ob)
                     last_advantage = 0
                     advantages = []
                     for t in reversed(range(len(rewards))):
@@ -132,7 +134,7 @@ class Explorer(object):
                     if isinstance(info, ReachGoal) or isinstance(info, Collision):
                         # only add positive(success) or negative(collision) experience in experience set
                         if doPPO:
-                            self.update_memory(states, actions, rewards, imitation_learning, vals, log_pis, advantages)
+                            self.update_memory(states, actions, rewards, imitation_learning, aas, vals, log_pis, advantages)
                         else:
                             self.update_memory(states, actions, rewards, imitation_learning)
 
@@ -175,7 +177,7 @@ class Explorer(object):
                              * (1 if t >= i else 0) for t, reward in enumerate(rewards)])
         return value
 
-    def update_memory(self, states, actions, rewards, imitation_learning=False, vals=None, log_pis=None, advantages=None):
+    def update_memory(self, states, actions, rewards, imitation_learning=False, aas=None, vals=None, log_pis=None, advantages=None):
         if self.memory is None or self.gamma is None:
             raise ValueError('Memory or gamma value is not set!')
 
@@ -213,7 +215,7 @@ class Explorer(object):
                     self.memory.push((state, actions[i], value, log_pis[i], advantages[i]))
                 else:
                 '''
-                self.memory.push((state, actions[i], vals[i], log_pis[i], advantages[i]))
+                self.memory.push((state, aas[i], actions[i], vals[i], log_pis[i], advantages[i]))
             else:
                 self.memory.push((state, value))
 

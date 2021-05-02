@@ -45,7 +45,9 @@ class Trainer(object):
             for data in self.data_loader:
                 doPPO = len(data) > 2
                 if doPPO:
-                    inputs, actions, values, log_pis, advantages = data
+                    inputs, aas, actions, values, log_pis, advantages = data
+                    aas = Variable(aas)
+                    log_pis = Variable(log_pis)
                     advantages = Variable(advantages)
                 else:
                     inputs, values = data
@@ -58,7 +60,7 @@ class Trainer(object):
                     sampled_return = values + advantages
                     sampled_normalized_advantage = (advantages - advantages.mean())/(advantages.std() + 1e-8)
                     pi, val = self.model(inputs, getPI=True)
-                    log_pi = pi.log_prob(actions)
+                    log_pi = pi.log_prob(aas)
                     # calculate policy loss
                     policy_loss = self.ppo_loss(log_pi, log_pis, sampled_normalized_advantage, 0.1)
                     # calculate Entropy Bonus
