@@ -23,7 +23,7 @@ class ValueNetwork(nn.Module):
         # used when reformatting the mean of mlp1 output
         self.global_state_dim = mlp1_dims[-1]
 
-    def forward(self, state):
+    def forward(self, state, getPI=False):
         """
         First transform the world coordinates to self-centric coordinates and then do forward computation
 
@@ -54,10 +54,10 @@ class ValueNetwork(nn.Module):
         pi = Categorical(probs=pi)
         val = self.lin2(mlp4_output) # (batch_size, self.lin2)
         
-        # should be able to pull this out if necessary, right?
-        self.pi = pi
-        
-        return val
+        if getPI:
+            return pi, val
+        else:
+            return val
 
 
 class GAP(MultiHumanRL):
@@ -98,8 +98,7 @@ class GAP(MultiHumanRL):
                                           for human_state in state.human_states], dim=0)
         rotated_batch_input = self.rotate(batch_states).unsqueeze(0)
 
-        val = self.model(rotated_batch_input)
-        pi = self.model.pi
+        pi, val = self.model(rotated_batch_input, getPI=True)
         a = pi.sample()
         log_pi = pi.log_prob(a).cpu().numpy()
         

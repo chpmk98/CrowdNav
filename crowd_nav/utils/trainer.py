@@ -34,7 +34,7 @@ class Trainer(object):
         else:
             raise NotImplementedError
 
-    def optimize_epoch(self, num_epochs, alg=''):
+    def optimize_epoch(self, num_epochs):
         if self.optimizer is None:
             raise ValueError('Learning rate is not set!')
         if self.data_loader is None:
@@ -43,7 +43,8 @@ class Trainer(object):
         for epoch in range(num_epochs):
             epoch_loss = 0
             for data in self.data_loader:
-                if alg=='ppo':
+                doPPO = len(data) > 2
+                if doPPO:
                     inputs, actions, values, log_pis, advantages = data
                     actions = Variable(actions)
                     log_pis = Variable(log_pis)
@@ -54,11 +55,11 @@ class Trainer(object):
                 values = Variable(values)
 
                 self.optimizer.zero_grad()
-                if alg=='ppo':
+                if doPPO:
                     # loss for PPO
                     sampled_return = values + advantages
                     sampled_normalized_advantage = (advantages - advantages.mean())/(advantages.std() + 1e-8)
-                    _, pi, val, _ = self.model(inputs)
+                    pi, val = self.model(inputs, getPI=True)
                     log_pi = pi.log_prob(actions)
                     # calculate policy loss
                     policy_loss = self.ppo_loss(log_pi, log_pis, sampled_normalized_advantage, 0.1)
@@ -74,7 +75,7 @@ class Trainer(object):
                     loss = self.criterion(outputs, values)
                 loss.backward()
                 # clip gradients
-                if alg=='ppo':
+                if doPPO:
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
                 self.optimizer.step()
                 epoch_loss += loss.data.item()
@@ -84,25 +85,27 @@ class Trainer(object):
 
         return average_epoch_loss
 
-    def optimize_batch(self, num_batches, alg=''):
+    def optimize_batch(self, num_batches):
         if self.optimizer is None:
             raise ValueError('Learning rate is not set!')
         if self.data_loader is None:
             self.data_loader = DataLoader(self.memory, self.batch_size, shuffle=True)
         losses = 0
         for _ in range(num_batches):
-            if alg=='ppo':
-                inputs, actions, values, log_pis, advantages = next(iter(self.data_loader))
+            data = next(iter(self.data_loader))
+            doPPO = len(data) > 2
+            if doPPO:
+                inputs, actions, values, log_pis, advantages = data
                 actions = Variable(actions)
                 log_pis = Variable(log_pis)
                 advantages = Variable(advantages)
             else:
-                inputs, values = next(iter(self.data_loader))
+                inputs, values = data
             inputs = Variable(inputs)
             values = Variable(values)
 
             self.optimizer.zero_grad()
-            if alg=='ppo':
+            if doPPO:
                 # loss for PPO
                 sampled_return = values + advantages
                 sampled_normalized_advantage = (advantages - advantages.mean())/(advantages.std() + 1e-8)
@@ -122,7 +125,7 @@ class Trainer(object):
                 loss = self.criterion(outputs, values)
             loss.backward()
             # clip gradients
-            if alg=='ppo':
+            if doPPO:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
             self.optimizer.step()
             losses += loss.data.item()
