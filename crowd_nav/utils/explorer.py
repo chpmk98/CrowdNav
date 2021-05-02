@@ -40,6 +40,7 @@ class Explorer(object):
         max_accels = []
         average_jerks = []
         max_jerks = []
+        
         with torch.no_grad():
             for i in range(k):
                 ob = self.env.reset(phase)
@@ -48,8 +49,15 @@ class Explorer(object):
                 roboStates = []
                 actions = []
                 rewards = []
+                vals = []
+                log_pis = []
                 while not done:
-                    action = self.robot.act(ob)
+                    if self.target_policy == 'gap':
+                        action, val, _, log_pi = self.robot.act(ob)
+                        vals.append(val)
+                        log_pis.append(log_pi)
+                    else:
+                        action = self.robot.act(ob)
                     ob, reward, done, info = self.env.step(action)
                     states.append(self.robot.policy.last_state)
                     actions.append(action)
@@ -89,10 +97,29 @@ class Explorer(object):
                 # average_jerks.append(np.mean(roboDF['jerk']))
                 # max_jerks.append(np.max(roboDF['jerk']))
 
+                # calculate advantages for ppo using GAE (Generalized Advantage Estimation)
+                if self.target_policy == 'gap':
+                    # set some GAE parameters
+                    gamma = 0.99
+                    lam = 0.95
+                    _, _, last_val, _ = self.robot.act(ob)
+                    last_advantage = 0
+                    advantages = []
+                    for t in reversed(range(len(rewards))):
+                        delta = rewards[t] + gamma * last_val - vals[t]
+                        last_advantage = delta + gamma * lam * last_advantage
+                        advantages.append(last_advantage)
+                        last_val = vals[t]
+                    # reverse the list of advantages because we built it backwards
+                    advantages.reverse()
+
                 if update_memory:
                     if isinstance(info, ReachGoal) or isinstance(info, Collision):
                         # only add positive(success) or negative(collision) experience in experience set
-                        self.update_memory(states, actions, rewards, imitation_learning)
+                        if self.target_policy == 'gap':
+                            self.update_memory(states, actions, rewards, imitation_learning, vals, log_pis, advantages)
+                        else:
+                            self.update_memory(states, actions, rewards, imitation_learning)
 
                 cumulative_rewards.append(sum([pow(self.gamma, t * self.robot.time_step * self.robot.v_pref)
                                                * reward for t, reward in enumerate(rewards)]))
@@ -128,7 +155,7 @@ class Explorer(object):
             logging.info('Collision cases: ' + ' '.join([str(x) for x in collision_cases]))
             logging.info('Timeout cases: ' + ' '.join([str(x) for x in timeout_cases]))
 
-    def update_memory(self, states, actions, rewards, imitation_learning=False):
+    def update_memory(self, states, actions, rewards, imitation_learning=False, vals=None, log_pis=None, advantages=None):
         if self.memory is None or self.gamma is None:
             raise ValueError('Memory or gamma value is not set!')
 
@@ -161,7 +188,10 @@ class Explorer(object):
             # if human_num != 5:
             #     padding = torch.zeros((5 - human_num, feature_size))
             #     state = torch.cat([state, padding])
-            self.memory.push((state, value))
+            if self.env.target_policy == 'gap':
+                self.memory.push((state, actions[i], vals[i], log_pis[i], advantages[i]))
+            else:
+                self.memory.push((state, value))
 
 
 def average(input_list):

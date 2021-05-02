@@ -90,22 +90,21 @@ class GAP(MultiHumanRL):
         if self.action_space is None:
             self.build_action_space(state.self_state.v_pref)
             
-        probability = np.random.random()
-        if self.phase == 'train' and probability < self.epsilon:
-            next_action = self.action_space[np.random.choice(len(self.action_space))]
-        else:
-            batch_states = torch.cat([torch.Tensor([state.self_state + human_state]).to(self.device)
-                                              for human_state in state.human_states], dim=0)
-            rotated_batch_input = self.rotate(batch_states).unsqueeze(0)
 
-            pi, val = self.model(rotated_batch_input)
-            a = pi.sample()
-            next_action = self.action_space[int(a.cpu().numpy())]
+        batch_states = torch.cat([torch.Tensor([state.self_state + human_state]).to(self.device)
+                                          for human_state in state.human_states], dim=0)
+        rotated_batch_input = self.rotate(batch_states).unsqueeze(0)
+
+        pi, val = self.model(rotated_batch_input)
+        a = pi.sample()
+        log_pi = pi.log_prob(a).cpu().numpy()
+        
+        next_action = self.action_space[int(a.cpu().numpy())]
         
         if self.phase == 'train':
             self.last_state = self.transform(state)
         
-        return next_action
+        return next_action, pi, val, log_pi
 
 
 
