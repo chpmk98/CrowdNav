@@ -23,10 +23,11 @@ class Trainer(object):
         self.optimizer = optim.SGD(self.model.parameters(), lr=learning_rate, momentum=0.9)
 
     def set_optimizer(self, optimizer, learning_rate, epsilon=None):
-        logging.info('Current learning rate: %f', learning_rate)
         if optimizer == 'sgd':
+            logging.info('Using stochastic gradient descent')
             self.optimizer = optim.SGD(self.model.parameters(), lr=learning_rate, momentum=0.9)
         elif optimizer == 'adam':
+            logging.info('Using Adam optimizer')
             self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate, eps=epsilon)
         else:
             raise NotImplementedError
