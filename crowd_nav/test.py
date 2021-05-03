@@ -91,7 +91,10 @@ def main():
         done = False
         last_pos = np.array(robot.get_position())
         while not done:
-            action = robot.act(ob)
+            try:
+                _, action, _, _, _ = robot.act(ob)
+            except ValueError:
+                action = robot.act(ob)
             ob, _, done, info = env.step(action)
             current_pos = np.array(robot.get_position())
             logging.debug('Speed: %.2f', np.linalg.norm(current_pos - last_pos) / robot.time_step)
