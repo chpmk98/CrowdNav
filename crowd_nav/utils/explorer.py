@@ -220,8 +220,7 @@ class Explorer(object):
                 if imitation_learning:
                     self.memory.push((state, actions[i], value, log_pis[i], advantages[i]))
                 else:
-                '''
-                self.memory.push((state, aas[i], actions[i], vals[i], log_pis[i], advantages[i]))
+                    self.memory.push((state, aas[i], actions[i], vals[i], log_pis[i], advantages[i]))
             else:
                 self.memory.push((state, value))
 
