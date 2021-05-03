@@ -216,7 +216,7 @@ class Explorer(object):
             # if human_num != 5:
             #     padding = torch.zeros((5 - human_num, feature_size))
             #     state = torch.cat([state, padding])
-            if isinstance(self.target_policy, GAP):
+            if isinstance(self.target_policy, GAP) and not imitation_learning:
                 if imitation_learning:
                     self.memory.push((state, actions[i], value, log_pis[i], advantages[i]))
                 else:

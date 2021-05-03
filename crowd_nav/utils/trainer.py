@@ -45,40 +45,44 @@ class Trainer(object):
         for epoch in range(num_epochs):
             epoch_loss = 0
             for data in self.data_loader:
-                doPPO = len(data) > 2
-                if doPPO:
-                    inputs, aas, actions, values, log_pis, advantages = data
-                    aas = Variable(aas).to(self.device)
-                    log_pis = Variable(log_pis).to(self.device)
-                    advantages = Variable(advantages).to(self.device)
-                else:
-                    inputs, values = data
+                # doPPO = len(data) > 2
+                # if doPPO:
+                #     inputs, aas, actions, values, log_pis, advantages = data
+                #     aas = Variable(aas).to(self.device)
+                #     log_pis = Variable(log_pis).to(self.device)
+                #     advantages = Variable(advantages).to(self.device)
+                # else:
+                #     inputs, values = data
+
+                inputs, values = data
                 inputs = Variable(inputs).to(self.device)
                 values = Variable(values).to(self.device)
 
                 self.optimizer.zero_grad()
-                if doPPO:
-                    # loss for PPO
-                    sampled_return = values + advantages
-                    sampled_normalized_advantage = (advantages - advantages.mean())/(advantages.std() + 1e-8)
-                    pi, val = self.model(inputs, getPI=True)
-                    log_pi = pi.log_prob(aas)
-                    # calculate policy loss
-                    policy_loss = self.ppo_loss(log_pi, log_pis, sampled_normalized_advantage, 0.1)
-                    # calculate Entropy Bonus
-                    entropy_bonus = pi.entropy()
-                    entropy_bonus = entropy_bonus.mean()
-                    # calculate value function loss
-                    value_loss = self.value_loss(val, values, sampled_return, 0.1)
-                    # calculate total loss
-                    loss = policy_loss + 0.5 * value_loss - 0.01 * entropy_bonus
-                else:
-                    outputs = self.model(inputs)
-                    loss = self.criterion(outputs, values)
+                # if doPPO:
+                #     # loss for PPO
+                #     sampled_return = values + advantages
+                #     sampled_normalized_advantage = (advantages - advantages.mean())/(advantages.std() + 1e-8)
+                #     pi, val = self.model(inputs, getPI=True)
+                #     log_pi = pi.log_prob(aas)
+                #     # calculate policy loss
+                #     policy_loss = self.ppo_loss(log_pi, log_pis, sampled_normalized_advantage, 0.1)
+                #     # calculate Entropy Bonus
+                #     entropy_bonus = pi.entropy()
+                #     entropy_bonus = entropy_bonus.mean()
+                #     # calculate value function loss
+                #     value_loss = self.value_loss(val, values, sampled_return, 0.1)
+                #     # calculate total loss
+                #     loss = policy_loss + 0.5 * value_loss - 0.01 * entropy_bonus
+                # else:
+                #     outputs = self.model(inputs)
+                #     loss = self.criterion(outputs, values)
+                outputs = self.model(inputs)
+                loss = self.criterion(outputs, values)
                 loss.backward()
                 # clip gradients
-                if doPPO:
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
+                # if doPPO:
+                #     torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
                 self.optimizer.step()
                 epoch_loss += loss.data.item()
 
