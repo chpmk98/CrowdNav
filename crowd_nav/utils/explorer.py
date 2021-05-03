@@ -22,7 +22,7 @@ class Explorer(object):
             self.GAP_action_space = target_policy.action_space
         elif isinstance(robot.policy, GAP):
             robot.policy.build_action_space(robot.v_pref)
-            self.GAP_action_space = robot.policy.action_space 
+            self.GAP_action_space = robot.policy.action_space
 
     def update_target_model(self, target_model):
         self.target_model = copy.deepcopy(target_model)
@@ -129,7 +129,7 @@ class Explorer(object):
                         vals = [self._compute_value(ind, rewards) for ind in range(len(states))]
                         action = self.robot.act(ob)
                         _, last_val, _, _ = self.env.step(action)
-                        
+
                     last_advantage = 0
                     advantages = []
                     for t in reversed(range(len(rewards))):
@@ -155,38 +155,21 @@ class Explorer(object):
         collision_rate = collision / k
         assert success + collision + timeout == k
         avg_nav_time = sum(success_times) / len(success_times) if success_times else self.env.time_limit
-
-<<<<<<< HEAD
-        # ave_ave_speed = sum(average_speeds) / len(average_speeds)
-        # ave_max_speed = sum(max_speeds) / len(max_speeds)
-        # ave_ave_accel = sum(average_accels) / len(average_accels)
-        # ave_max_accel = sum(max_accels) / len(max_accels)
-        # ave_ave_jerk = sum(average_jerks) / len(average_jerks)
-        # ave_max_jerk = sum(max_jerks) / len(max_jerks)
-=======
-        '''
         ave_ave_speed = sum(average_speeds) / len(average_speeds)
         ave_max_speed = sum(max_speeds) / len(max_speeds)
         ave_ave_accel = sum(average_accels) / len(average_accels)
         ave_max_accel = sum(max_accels) / len(max_accels)
         ave_ave_jerk = sum(average_jerks) / len(average_jerks)
         ave_max_jerk = sum(max_jerks) / len(max_jerks)
-        '''
->>>>>>> 085c276c50e5418b25b34ad00e566be4d35b47da
 
         extra_info = '' if episode is None else 'in episode {} '.format(episode)
         logging.info('{:<5} {}has success rate: {:.2f}, collision rate: {:.2f}, nav time: {:.2f}, total reward: {:.4f}'.
                      format(phase.upper(), extra_info, success_rate, collision_rate, avg_nav_time,
                             average(cumulative_rewards)))
-<<<<<<< HEAD
-        # logging.info('ave speed: {:.2f}, max speed: {:.2f}, ave accel: {:.2f}, max accel: {:.2f}, ave jerk: {:.2f}, max jerk: {:.2f}'.
-        #              format(ave_ave_speed, ave_max_speed, ave_ave_accel, ave_max_accel, ave_ave_jerk, ave_max_jerk))
-=======
-        '''
+
         logging.info('ave speed: {:.2f}, max speed: {:.2f}, ave accel: {:.2f}, max accel: {:.2f}, ave jerk: {:.2f}, max jerk: {:.2f}'.
                      format(ave_ave_speed, ave_max_speed, ave_ave_accel, ave_max_accel, ave_ave_jerk, ave_max_jerk))
-        '''
->>>>>>> 085c276c50e5418b25b34ad00e566be4d35b47da
+
         if phase in ['val', 'test']:
             num_step = sum(success_times + collision_times + timeout_times) / self.robot.time_step
             logging.info('Frequency of being in danger: %.2f and average min separate distance in danger: %.2f',
@@ -234,7 +217,6 @@ class Explorer(object):
             #     padding = torch.zeros((5 - human_num, feature_size))
             #     state = torch.cat([state, padding])
             if isinstance(self.target_policy, GAP):
-                '''
                 if imitation_learning:
                     self.memory.push((state, actions[i], value, log_pis[i], advantages[i]))
                 else:
