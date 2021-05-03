@@ -16,6 +16,13 @@ class Explorer(object):
         self.gamma = gamma
         self.target_policy = target_policy
         self.target_model = None
+        # build an action space if we need it
+        if isinstance(target_policy, GAP):
+            target_policy.build_action_space(robot.v_pref)
+            self.GAP_action_space = target_policy.action_space
+        elif isinstance(robot.policy, GAP):
+            robot.policy.build_action_space(robot.v_pref)
+            self.GAP_action_space = robot.policy.action_space 
 
     def update_target_model(self, target_model):
         self.target_model = copy.deepcopy(target_model)
@@ -41,11 +48,10 @@ class Explorer(object):
         max_accels = []
         average_jerks = []
         max_jerks = []
-        
         # sometimes we do wonky PPO stuff
-        doPPO = isinstance(self.target_policy, GAP)
+        doPPO = isinstance(self.target_policy, GAP) or isinstance(self.robot.policy, GAP)
         nominal_log_pi = np.log(0.7) # log probability of action used for imitation learning
-        
+
         with torch.no_grad():
             for i in range(k):
                 ob = self.env.reset(phase)
@@ -60,13 +66,16 @@ class Explorer(object):
                 while not done:
                     if doPPO:
                         # generate nominal values if doing imitation learning
-                        if imitation_learning:
-                            action = self.robot.act(ob)
-                            log_pi = nominal_log_pi
-                        else:
+                        try:
                             a, action, _, val, log_pi = self.robot.act(ob)
-                            aas.append(a)
                             vals.append(val)
+                        except ValueError:
+                            action = self.robot.act(ob)
+                            act_norms = np.array([np.sqrt((ass.vx - action.vx)**2 + (ass.vy - action.vy)**2) for ass in self.GAP_action_space])
+                            a = np.argmin(act_norms)
+                            action = self.GAP_action_space[a]
+                            log_pi = nominal_log_pi
+                        aas.append(a)
                         log_pis.append(log_pi)
                     else:
                         action = self.robot.act(ob)
@@ -114,12 +123,13 @@ class Explorer(object):
                     # set some GAE parameters
                     gamma = 0.99
                     lam = 0.95
-                    if imitation_learning:
+                    try:
+                        _, _, _, last_val, _ = self.robot.act(ob)
+                    except ValueError:
                         vals = [self._compute_value(ind, rewards) for ind in range(len(states))]
                         action = self.robot.act(ob)
                         _, last_val, _, _ = self.env.step(action)
-                    else:
-                        _, _, _, last_val, _ = self.robot.act(ob)
+                        
                     last_advantage = 0
                     advantages = []
                     for t in reversed(range(len(rewards))):

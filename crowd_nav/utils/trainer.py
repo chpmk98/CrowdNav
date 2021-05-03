@@ -1,4 +1,5 @@
 import logging
+import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.autograd import Variable
@@ -46,13 +47,13 @@ class Trainer(object):
                 doPPO = len(data) > 2
                 if doPPO:
                     inputs, aas, actions, values, log_pis, advantages = data
-                    aas = Variable(aas)
-                    log_pis = Variable(log_pis)
-                    advantages = Variable(advantages)
+                    aas = Variable(aas).to(self.device)
+                    log_pis = Variable(log_pis).to(self.device)
+                    advantages = Variable(advantages).to(self.device)
                 else:
                     inputs, values = data
-                inputs = Variable(inputs)
-                values = Variable(values)
+                inputs = Variable(inputs).to(self.device)
+                values = Variable(values).to(self.device)
 
                 self.optimizer.zero_grad()
                 if doPPO:
@@ -92,25 +93,29 @@ class Trainer(object):
             self.data_loader = DataLoader(self.memory, self.batch_size, shuffle=True)
         losses = 0
         for _ in range(num_batches):
-            data = next(iter(self.data_loader))
+            try:
+                data = next(iter(self.data_loader))
+            except TypeError:
+                print("failed to get a batch")
+                continue
             doPPO = len(data) > 2
             if doPPO:
-                inputs, actions, values, log_pis, advantages = data
-                actions = Variable(actions)
-                log_pis = Variable(log_pis)
-                advantages = Variable(advantages)
+                inputs, aas, actions, values, log_pis, advantages = data
+                aas = Variable(aas).to(self.device)
+                log_pis = Variable(log_pis).to(self.device)
+                advantages = Variable(advantages).to(self.device)
             else:
                 inputs, values = data
-            inputs = Variable(inputs)
-            values = Variable(values)
+            inputs = Variable(inputs).to(self.device)
+            values = Variable(values).to(self.device)
 
             self.optimizer.zero_grad()
             if doPPO:
                 # loss for PPO
                 sampled_return = values + advantages
                 sampled_normalized_advantage = (advantages - advantages.mean())/(advantages.std() + 1e-8)
-                _, pi, val, _ = self.model(inputs)
-                log_pi = pi.log_prob(actions)
+                pi, val = self.model(inputs, getPI=True)
+                log_pi = pi.log_prob(aas)
                 # calculate policy loss
                 policy_loss = self.ppo_loss(log_pi, log_pis, sampled_normalized_advantage, 0.1)
                 # calculate Entropy Bonus

@@ -7,6 +7,7 @@ import logging
 import numpy as np
 from crowd_nav.policy.cadrl import mlp
 from crowd_nav.policy.multi_human_rl import MultiHumanRL
+from crowd_sim.envs.utils.action import ActionRot, ActionXY
 
 
 class ValueNetwork(nn.Module):
@@ -100,7 +101,7 @@ class GAP(MultiHumanRL):
 
         pi, val = self.model(rotated_batch_input, getPI=True)
         a = pi.sample()
-        log_pi = pi.log_prob(a).cpu().numpy()
+        log_pi = pi.log_prob(a).detach().numpy()
         
         next_action = self.action_space[int(a.cpu().numpy())]
         
