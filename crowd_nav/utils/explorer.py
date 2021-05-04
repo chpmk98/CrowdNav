@@ -22,7 +22,8 @@ class Explorer(object):
             self.GAP_action_space = target_policy.action_space
         elif isinstance(robot.policy, GAP):
             robot.policy.build_action_space(robot.v_pref)
-            self.GAP_action_space = robot.policy.action_space 
+            self.GAP_action_space = robot.policy.action_space
+        self.doPPO = False
 
     def update_target_model(self, target_model):
         self.target_model = copy.deepcopy(target_model)
@@ -49,7 +50,7 @@ class Explorer(object):
         average_jerks = []
         max_jerks = []
         # sometimes we do wonky PPO stuff
-        doPPO = isinstance(self.target_policy, GAP) or isinstance(self.robot.policy, GAP)
+        self.doPPO = isinstance(self.target_policy, GAP) or isinstance(self.robot.policy, GAP)
         nominal_log_pi = np.log(0.7) # log probability of action used for imitation learning
 
         with torch.no_grad():
@@ -64,7 +65,7 @@ class Explorer(object):
                 log_pis = []
                 aas = []
                 while not done:
-                    if doPPO:
+                    if self.doPPO:
                         # generate nominal values if doing imitation learning
                         try:
                             a, action, _, val, log_pi = self.robot.act(ob)
@@ -119,7 +120,7 @@ class Explorer(object):
                 # max_jerks.append(np.max(roboDF['jerk']))
 
                 # calculate advantages for ppo using GAE (Generalized Advantage Estimation)
-                if doPPO:
+                if self.doPPO:
                     # set some GAE parameters
                     gamma = 0.99
                     lam = 0.95
@@ -143,7 +144,7 @@ class Explorer(object):
                 if update_memory:
                     if isinstance(info, ReachGoal) or isinstance(info, Collision):
                         # only add positive(success) or negative(collision) experience in experience set
-                        if doPPO:
+                        if self.doPPO:
                             self.update_memory(states, actions, rewards, imitation_learning, aas, vals, log_pis, advantages)
                         else:
                             self.update_memory(states, actions, rewards, imitation_learning)
@@ -219,7 +220,7 @@ class Explorer(object):
             # if human_num != 5:
             #     padding = torch.zeros((5 - human_num, feature_size))
             #     state = torch.cat([state, padding])
-            if isinstance(self.target_policy, GAP):
+            if self.doPPO:
                 '''
                 if imitation_learning:
                     self.memory.push((state, actions[i], value, log_pis[i], advantages[i]))

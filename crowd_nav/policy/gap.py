@@ -100,10 +100,11 @@ class GAP(MultiHumanRL):
         rotated_batch_input = self.rotate(batch_states).unsqueeze(0)
 
         pi, val = self.model(rotated_batch_input, getPI=True)
+        val = val.data.item()
         a = pi.sample()
-        log_pi = pi.log_prob(a).detach().numpy()
-        
-        next_action = self.action_space[int(a.cpu().numpy())]
+        log_pi = pi.log_prob(a).data.item() # log_prob needs a Tensor
+        a = a.data.item()
+        next_action = self.action_space[a]
         
         if self.phase == 'train':
             self.last_state = self.transform(state)
