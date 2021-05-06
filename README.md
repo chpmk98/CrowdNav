@@ -1,26 +1,9 @@
-# CrowdNav
-This repository contains the codes for our ICRA 2019 paper. For more details, please refer to the paper
-[Crowd-Robot Interaction: Crowd-aware Robot Navigation with Attention-based Deep Reinforcement Learning](https://arxiv.org/abs/1809.08835).
-
-Please find our more recent work on 
-- [Relational Graph Learning for Crowd Navigation](https://github.com/ChanganVR/RelationalGraphLearning).
-- [Social NCE: Contrastive Learning of Socially-aware Motion Representations](https://github.com/vita-epfl/social-nce).
+# GroupNav
+This repository contains the codes for our CS 289A final project. For more details, please refer to the paper
+[Robot Navigation Around Groups of Pedestrians](http://people.eecs.berkeley.edu/~spohland/images/CS289.pdf).
 
 ## Abstract
-Mobility in an effective and socially-compliant manner is an essential yet challenging task for robots operating in crowded spaces.
-Recent works have shown the power of deep reinforcement learning techniques to learn socially cooperative policies.
-However, their cooperation ability deteriorates as the crowd grows since they typically relax the problem as a one-way Human-Robot interaction problem.
-In this work, we want to go beyond first-order Human-Robot interaction and more explicitly model Crowd-Robot Interaction (CRI).
-We propose to (i) rethink pairwise interactions with a self-attention mechanism, and
-(ii) jointly model Human-Robot as well as Human-Human interactions in the deep reinforcement learning framework.
-Our model captures the Human-Human interactions occurring in dense crowds that indirectly affects the robot's anticipation capability.
-Our proposed attentive pooling mechanism learns the collective importance of neighboring humans with respect to their future states.
-Various experiments demonstrate that our model can anticipate human dynamics and navigate in crowds with time efficiency,
-outperforming state-of-the-art methods.
-
-
-## Method Overview
-<img src="https://i.imgur.com/YOPHXD1.png" width="1000" />
+In order to deploy service robots in non-industrial settings, it is imperative to design robots that navigate safely and effectively in the presence of humans. While a large body of work has designed robot navigation policies that account for typical human movement patterns, the majority of this work has treated humans as independent individuals. In reality, most people move in groups, so it is important to design robot navigation policies that consider the social rules surrounding group behavior. Because group-aware robot navigation is an important and underexplored area of research, we chose to critically revisit the published paper “Group-Aware Robot Navigation in Crowded Environments,” which used attention-based deep reinforcement learning to design a robot navigation policy. In recreating this paper, we generated data using the CrowdNav simulation, which we modified to simulate dynamic social groups. We also implemented a group-aware reward function and neural network architecture, integrated the PPO reinforcement learning algorithm and Adam optimizer into the CrowdNav learning pipeline, and enabled the use of imitation learning with PPO. After training a group-aware robot navigation policy, which we called GAP, we compared GAP with two baseline navigation policies: ORCA and SARL. We found that a robot controlled by GAP reaches its goal more often and collides with groups of pedestrians less often when compared to the baseline policies. However, when the robot is controlled by GAP, it also exhibits behaviors that are undesirable in the real-world. With more time and improved computational resources, we would have tuned the training parameters and trained the policies over more episodes to address this issue.
 
 ## Setup
 1. Install [Python-RVO2](https://github.com/sybrenstuvel/Python-RVO2) library
@@ -38,50 +21,23 @@ inside the crowd_nav/ folder.
 
 1. Train a policy.
 ```
-python train.py --policy sarl
+python train.py --policy gap
 ```
 2. Test policies with 500 test cases.
 ```
 python test.py --policy orca --phase test
-python test.py --policy sarl --model_dir data/output --phase test
+python test.py --policy gap --model_dir data/output --phase test
 ```
 3. Run policy for one episode and visualize the result.
 ```
 python test.py --policy orca --phase test --visualize --test_case 0
-python test.py --policy sarl --model_dir data/output --phase test --visualize --test_case 0
+python test.py --policy gap --model_dir data/output --phase test --visualize --test_case 0
 ```
 4. Visualize a test case.
 ```
-python test.py --policy sarl --model_dir data/output --phase test --visualize --test_case 0
+python test.py --policy gap --model_dir data/output --phase test --visualize --test_case 0
 ```
 5. Plot training curve.
 ```
 python utils/plot.py data/output/output.log
-```
-
-
-## Simulation Videos
-CADRL             | LSTM-RL
-:-------------------------:|:-------------------------:
-<img src="https://i.imgur.com/vrWsxPM.gif" width="400" />|<img src="https://i.imgur.com/6gjT0nG.gif" width="400" />
-SARL             |  OM-SARL
-<img src="https://i.imgur.com/rUtAGVP.gif" width="400" />|<img src="https://i.imgur.com/UXhcvZL.gif" width="400" />
-
-
-## Learning Curve
-Learning curve comparison between different methods in an invisible setting.
-
-<img src="https://i.imgur.com/l5UC3qa.png" width="600" />
-
-## Citation
-If you find the codes or paper useful for your research, please cite our paper:
-```bibtex
-@inproceedings{chen2019crowd,
-  title={Crowd-robot interaction: Crowd-aware robot navigation with attention-based deep reinforcement learning},
-  author={Chen, Changan and Liu, Yuejiang and Kreiss, Sven and Alahi, Alexandre},
-  booktitle={2019 International Conference on Robotics and Automation (ICRA)},
-  pages={6015--6022},
-  year={2019},
-  organization={IEEE}
-}
 ```
