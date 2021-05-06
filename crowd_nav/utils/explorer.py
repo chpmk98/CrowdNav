@@ -143,22 +143,22 @@ class Explorer(object):
                     advantages.reverse()
 
                 if update_memory:
-                    #if isinstance(info, ReachGoal) or isinstance(info, Collision):
+                    if isinstance(info, ReachGoal) or isinstance(info, Collision):
                         # only add positive(success) or negative(collision) experience in experience set
-                    if self.doPPO:
-                        self.update_memory(states, actions, rewards, imitation_learning, aas, vals, log_pis, advantages)
-                    else:
-                        self.update_memory(states, actions, rewards, imitation_learning)
+                        if self.doPPO:
+                            self.update_memory(states, actions, rewards, imitation_learning, aas, vals, log_pis, advantages)
+                        else:
+                            self.update_memory(states, actions, rewards, imitation_learning)
 
                 cumulative_rewards.append(sum([pow(self.gamma, t * self.robot.time_step * self.robot.v_pref)
                                                * reward for t, reward in enumerate(rewards)]))
 
-        #'''
         success_rate = success / k
         collision_rate = collision / k
         assert success + collision + timeout == k
         avg_nav_time = sum(success_times) / len(success_times) if success_times else self.env.time_limit
 
+        #'''
         ave_ave_speed = sum(average_speeds) / len(average_speeds)
         ave_max_speed = sum(max_speeds) / len(max_speeds)
         ave_ave_accel = sum(average_accels) / len(average_accels)
@@ -171,14 +171,15 @@ class Explorer(object):
         logging.info('{:<5} {}has success rate: {:.2f}, collision rate: {:.2f}, nav time: {:.2f}, total reward: {:.4f}'.
                      format(phase.upper(), extra_info, success_rate, collision_rate, avg_nav_time,
                             average(cumulative_rewards)))
-        #'''
-        logging.info('ave speed: {:.2f}, max speed: {:.2f}, ave accel: {:.2f}, max accel: {:.2f}, ave jerk: {:.2f}, max jerk: {:.2f}'.
-                     format(ave_ave_speed, ave_max_speed, ave_ave_accel, ave_max_accel, ave_ave_jerk, ave_max_jerk))
-        #'''
+
         if phase in ['val', 'test']:
             num_step = sum(success_times + collision_times + timeout_times) / self.robot.time_step
             logging.info('Frequency of being in danger: %.2f and average min separate distance in danger: %.2f',
                          too_close / num_step, average(min_dist))
+            #'''
+            logging.info('ave speed: {:.2f}, max speed: {:.2f}, ave accel: {:.2f}, max accel: {:.2f}, ave jerk: {:.2f}, max jerk: {:.2f}'.
+                          format(ave_ave_speed, ave_max_speed, ave_ave_accel, ave_max_accel, ave_ave_jerk, ave_max_jerk))
+            #'''
 
         if print_failure:
             logging.info('Collision cases: ' + ' '.join([str(x) for x in collision_cases]))

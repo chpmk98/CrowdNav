@@ -677,14 +677,14 @@ class CrowdSim(gym.Env):
         elif mode == 'video':
             fig, ax = plt.subplots(figsize=(7, 7))
             ax.tick_params(labelsize=16)
-            ax.set_xlim(-6, 6)
-            ax.set_ylim(-6, 6)
+            ax.set_xlim(-8, 8)
+            ax.set_ylim(-8, 8)
             ax.set_xlabel('x(m)', fontsize=16)
             ax.set_ylabel('y(m)', fontsize=16)
 
             # add robot and its goal
             robot_positions = [state[0].position for state in self.states]
-            goal = mlines.Line2D([0], [4], color=goal_color, marker='*', linestyle='None', markersize=15, label='Goal')
+            goal = mlines.Line2D([0], [7], color=goal_color, marker='*', linestyle='None', markersize=15, label='Goal')
             robot = plt.Circle(robot_positions[0], self.robot.radius, fill=True, color=robot_color)
             ax.add_artist(robot)
             ax.add_artist(goal)
@@ -704,11 +704,13 @@ class CrowdSim(gym.Env):
             time = plt.text(-1, 5, 'Time: {}'.format(0), fontsize=16)
             ax.add_artist(time)
 
+            '''
             # compute attention scores
             if self.attention_weights is not None:
                 attention_scores = [
                     plt.text(-5.5, 5 - 0.5 * i, 'Human {}: {:.2f}'.format(i + 1, self.attention_weights[0][i]),
                              fontsize=16) for i in range(len(self.humans))]
+            '''
 
             # compute orientation in each step and use arrow to show the direction
             radius = self.robot.radius
@@ -750,9 +752,11 @@ class CrowdSim(gym.Env):
                                                       arrowstyle=arrow_style) for orientation in orientations]
                     for arrow in arrows:
                         ax.add_artist(arrow)
+                    '''
                     if self.attention_weights is not None:
                         human.set_color(str(self.attention_weights[frame_num][i]))
                         attention_scores[i].set_text('human {}: {:.2f}'.format(i, self.attention_weights[frame_num][i]))
+                    '''
 
                 time.set_text('Time: {:.2f}'.format(frame_num * self.time_step))
 
